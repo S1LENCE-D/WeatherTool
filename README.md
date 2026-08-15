@@ -101,6 +101,7 @@ python3 build_large.py   # 大字版分支（独立包名）
 - 设置面板横向分页重构
 - v9.87-fix：AGPS 注入定位优化（移植 ROM / 无 GMS 加速冷启动）
 - v9.87-fix：预警监控调度升级精确闹钟 + 权限降级链（修复后台推送失效）
+- v9.87-fix：后台推送链路诊断打点（WeatherDiag，仅 logcat 输出，无功能副作用）
 - ARM64 Linux 环境编译
 
 ### v9.86 及更早
