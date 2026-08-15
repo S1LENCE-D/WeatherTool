@@ -36,12 +36,16 @@ public final class AlertWatcher {
                 .getBoolean(KEY_ENABLED, false);
     }
 
-    /** 开关：开启即注册 30 分钟周期闹钟，关闭则取消 */
+    /** 开关：开启即立即首查并注册 30 分钟周期闹钟，关闭则取消 */
     public static void setEnabled(Context ctx, boolean on) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putBoolean(KEY_ENABLED, on).apply();
-        if (on) scheduleTick(ctx);
-        else cancelTick(ctx);
+        if (on) {
+            startCheck(ctx);        // 立即首查，不等 8 秒
+            scheduleTick(ctx);      // 排下一次
+        } else {
+            cancelTick(ctx);
+        }
     }
 
     /** 主页渲染天气 / 切换城市时同步地区快照（后台服务无 UI 实例，靠它拿省/区） */
@@ -97,7 +101,15 @@ public final class AlertWatcher {
         if (enabled(ctx)) scheduleTick(ctx);
     }
 
-    /** 注册周期触发：setInexactRepeating 省电，无需精确闹钟权限 */
+    /**
+     * v9.87：注册下一次预警检查。改为一次性「精确闹钟 + AllowWhileIdle」——
+     * setInexactRepeating 在 Doze/省电/厂商后台限制下会被系统大幅延迟甚至跳过
+     * （后台预警推送失效的主因）；每次触发后由 AlertAlarmReceiver 续排下一轮，
+     * 等效 30 分钟周期。
+     * 权限链：setExactAndAllowWhileIdle（Android 6+ 免权限，12+ 需 SCHEDULE_EXACT_ALARM）
+     *  → 无权限回退 setAndAllowWhileIdle（免权限、Doze 仍可达，仅不保证精确）
+     *  → 异常兜底 setInexactRepeating（老系统/厂商容错）。
+     */
     public static void scheduleTick(Context ctx) {
         AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
         if (am == null) return;
@@ -105,8 +117,36 @@ public final class AlertWatcher {
                 .setAction(ACTION_ALERT_TICK);
         PendingIntent pi = PendingIntent.getBroadcast(ctx, REQ_ALARM, it,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        am.setInexactRepeating(AlarmManager.RTC_WAKEUP,
-                System.currentTimeMillis() + 8000, INTERVAL_MS, pi);
+        long trigger = System.currentTimeMillis() + INTERVAL_MS;
+
+        // Android 12+：检查精确闹钟权限（反射调用，避免低版本编译问题）
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            try {
+                java.lang.reflect.Method m =
+                        AlarmManager.class.getMethod("canScheduleExactAlarms");
+                boolean ok = (Boolean) m.invoke(am);
+                if (!ok) {
+                    // 无精确闹钟权限：setAndAllowWhileIdle 免权限、Doze 下仍可达
+                    am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, trigger, pi);
+                    return;
+                }
+            } catch (Exception ignored) { }
+        }
+        try {
+            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, trigger, pi);
+        } catch (SecurityException e) {
+            // 权限被拒：降级
+            try {
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, trigger, pi);
+            } catch (Exception e2) {
+                am.setInexactRepeating(AlarmManager.RTC_WAKEUP,
+                        System.currentTimeMillis() + 8000, INTERVAL_MS, pi);
+            }
+        } catch (Exception e) {
+            // 极老系统/厂商兼容：退化为重复闹钟
+            am.setInexactRepeating(AlarmManager.RTC_WAKEUP,
+                    System.currentTimeMillis() + 8000, INTERVAL_MS, pi);
+        }
     }
 
     public static void cancelTick(Context ctx) {
