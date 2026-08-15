@@ -13,6 +13,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.app.AlarmManager;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
@@ -159,6 +160,37 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // v9.87-diag：启动时报告推送链路关键权限状态
+        try {
+            StringBuilder sb = new StringBuilder("启动诊断: SDK=")
+                    .append(Build.VERSION.SDK_INT).append(" API=")
+                    .append(Build.VERSION.RELEASE);
+            if (Build.VERSION.SDK_INT >= 33) {
+                sb.append(" POST_NOTIF=").append(checkSelfPermission(
+                        "android.permission.POST_NOTIFICATIONS")
+                        == PackageManager.PERMISSION_GRANTED);
+            }
+            if (Build.VERSION.SDK_INT >= 31) {
+                try {
+                    java.lang.reflect.Method m = AlarmManager.class
+                            .getMethod("canScheduleExactAlarms");
+                    AlarmManager am = (AlarmManager) getSystemService(ALARM_SERVICE);
+                    sb.append(" EXACT_ALARM=").append((Boolean) m.invoke(am));
+                } catch (Exception e) {
+                    sb.append(" EXACT_ALARM=err");
+                }
+            }
+            android.os.PowerManager pm = (android.os.PowerManager)
+                    getSystemService(POWER_SERVICE);
+            if (pm != null && Build.VERSION.SDK_INT >= 23) {
+                sb.append(" IGNORE_BATTERY=")
+                        .append(pm.isIgnoringBatteryOptimizations(getPackageName()));
+            }
+            sb.append(" 预警开关=").append(AlertWatcher.enabled(this));
+            Diag.i(sb.toString());
+        } catch (Exception e) {
+            Diag.i("启动诊断异常: " + e);
+        }
         LogFile.init(this);   // v9.87-fix：定位诊断日志（Download/WeatherTool_log_*.log）
         if (!LogFile.state().startsWith("Download/")) {
             // 降级提示：Download 写入失败（移植 ROM MediaProvider 异常等），日志在私有目录

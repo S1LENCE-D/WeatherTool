@@ -40,6 +40,7 @@ public final class AlertWatcher {
     public static void setEnabled(Context ctx, boolean on) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putBoolean(KEY_ENABLED, on).apply();
+        Diag.i("setEnabled on=" + on);
         if (on) {
             startCheck(ctx);        // 立即首查，不等 8 秒
             scheduleTick(ctx);      // 排下一次
@@ -125,27 +126,36 @@ public final class AlertWatcher {
                 java.lang.reflect.Method m =
                         AlarmManager.class.getMethod("canScheduleExactAlarms");
                 boolean ok = (Boolean) m.invoke(am);
+                Diag.i("scheduleTick: SDK>=31, canScheduleExactAlarms=" + ok
+                        + ", trigger+30min");
                 if (!ok) {
                     // 无精确闹钟权限：setAndAllowWhileIdle 免权限、Doze 下仍可达
                     am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, trigger, pi);
+                    Diag.i("scheduleTick: -> setAndAllowWhileIdle");
                     return;
                 }
-            } catch (Exception ignored) { }
+            } catch (Exception e) {
+                Diag.i("scheduleTick: canScheduleExactAlarms 反射异常: " + e);
+            }
         }
         try {
             am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, trigger, pi);
+            Diag.i("scheduleTick: -> setExactAndAllowWhileIdle");
         } catch (SecurityException e) {
             // 权限被拒：降级
             try {
                 am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, trigger, pi);
+                Diag.i("scheduleTick: SecurityException -> setAndAllowWhileIdle");
             } catch (Exception e2) {
                 am.setInexactRepeating(AlarmManager.RTC_WAKEUP,
                         System.currentTimeMillis() + 8000, INTERVAL_MS, pi);
+                Diag.i("scheduleTick: 兜底 setInexactRepeating");
             }
         } catch (Exception e) {
             // 极老系统/厂商兼容：退化为重复闹钟
             am.setInexactRepeating(AlarmManager.RTC_WAKEUP,
                     System.currentTimeMillis() + 8000, INTERVAL_MS, pi);
+            Diag.i("scheduleTick: 异常兜底 setInexactRepeating: " + e);
         }
     }
 

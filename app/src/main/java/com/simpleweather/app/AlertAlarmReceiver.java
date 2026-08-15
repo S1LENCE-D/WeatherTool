@@ -14,7 +14,9 @@ public class AlertAlarmReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         if (intent == null) return;
+        Diag.i("AlertAlarmReceiver.onReceive action=" + intent.getAction());
         if (!AlertWatcher.ACTION_ALERT_TICK.equals(intent.getAction())) return;
+        Diag.i("tick 收到，startCheck + 续排 enabled=" + AlertWatcher.enabled(context));
         AlertWatcher.startCheck(context);
         // 续排下一轮：开关已关时 scheduleTick 内不检查开关，
         // 由服务侧（startCheck -> AlertWatchService）自行自停；此处仅在开关开着时续排
