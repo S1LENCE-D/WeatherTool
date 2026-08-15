@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UV（wb_sunny）（提取自 MaterialIcons-Regular.ttf U+E430，与 App 内字形一致） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="15dp"
+    android:height="15dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M76 116 114 155 144 125 106 86ZM235 33V96H277V33ZM165.5 357.5Q203 395 256.0 395.0Q309 395 346.5 357.5Q384 320 384.0 267.0Q384 214 346.5 176.5Q309 139 256.0 139.0Q203 139 165.5 176.5Q128 214 128.0 267.0Q128 320 165.5 357.5ZM427 288H491V245H427ZM368 125 398 154 436 116 406 86ZM436 417 398 379 368 409 406 447ZM277 500V437H235V500ZM85 288V245H21V288ZM144 409 114 379 76 417 106 447Z" />
+</vector>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 木浆色（米白纸浆）纯色背景 -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#F2EDE2" />
+            <corners android:radius="22dp" />
+        </shape>
+    </item>
+    <!-- 黑白简笔画太阳（居中） -->
+    <item
+        android:width="64dp"
+        android:height="64dp"
+        android:gravity="center"
+        android:drawable="@drawable/ic_sun" />
+</layer-list>

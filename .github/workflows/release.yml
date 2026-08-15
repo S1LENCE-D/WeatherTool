@@ -1,0 +1,89 @@
+# ============================================================
+# WeatherTool 正式版自动发布流水线
+# 触发方式（二选一）：
+#   1. 推送 tag：git tag v9.88 && git push origin v9.88
+#   2. 仓库 Actions 页面手动运行（填版本号）
+# 产物：Release APK（含源码包，GitHub 自动附带 Source code）
+# 签名：配置仓库 Secrets 后自动正式签名；未配置则出 debug 签名包
+# Secrets 设置：Settings → Secrets and variables → Actions
+#   SIGNING_KEYSTORE_BASE64 : keystore 文件 base64（openssl base64 -in xx.jks | tr -d '\n'）
+#   SIGNING_KEYSTORE_PASS   : keystore 密码
+#   SIGNING_KEY_ALIAS       : 别名
+#   SIGNING_KEY_PASS        : 密钥密码
+# ============================================================
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号（如 9.88）'
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 拉取源码
+        uses: actions/checkout@v4
+
+      - name: 配置 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: 解析版本号
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "name=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 还原签名密钥（可选）
+        id: sign
+        run: |
+          if [ -n "${{ secrets.SIGNING_KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.SIGNING_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/weathertool.jks"
+            echo "SIGNING_KEYSTORE=$RUNNER_TEMP/weathertool.jks" >> "$GITHUB_ENV"
+            echo "SIGNING_KEYSTORE_PASS=${{ secrets.SIGNING_KEYSTORE_PASS }}" >> "$GITHUB_ENV"
+            echo "SIGNING_KEY_ALIAS=${{ secrets.SIGNING_KEY_ALIAS }}" >> "$GITHUB_ENV"
+            echo "SIGNING_KEY_PASS=${{ secrets.SIGNING_KEY_PASS }}" >> "$GITHUB_ENV"
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+            echo "sign_label=正式签名" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "sign_label=未配置 Secrets，debug 签名（仅测试用）" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 构建 Release APK
+        run: |
+          chmod +x gradlew 2>/dev/null || true
+          ./gradlew assembleRelease --no-daemon
+        env:
+          # 未配置签名 secrets 时以下为空，build.gradle 自动跳过签名
+          SIGNING_KEYSTORE: ${{ env.SIGNING_KEYSTORE }}
+          SIGNING_KEYSTORE_PASS: ${{ env.SIGNING_KEYSTORE_PASS }}
+          SIGNING_KEY_ALIAS: ${{ env.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASS: ${{ env.SIGNING_KEY_PASS }}
+
+      - name: 上传 APK 到 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.name }}
+          name: WeatherTool v${{ steps.ver.outputs.name }}
+          body: |
+            ## WeatherTool v${{ steps.ver.outputs.name }} 正式版
+
+            - 构建来源：GitHub Actions 自动构建
+            - 签名：${{ steps.sign.outputs.sign_label }}
+            - 源码：本 Release 附带的 Source code 压缩包即为完整开源工程
+          files: |
+            app/build/outputs/apk/release/*.apk
+          fail_on_unmatched_files: false

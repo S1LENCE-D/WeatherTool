@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 云量（cloud）（提取自 MaterialIcons-Regular.ttf U+E2BD，与 App 内字形一致） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="15dp"
+    android:height="15dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M413 298Q454 295 483.0 264.5Q512 234 512 192Q512 148 480.5 116.5Q449 85 405 85H128Q75 85 37.5 122.5Q0 160 0 213Q0 260 33.5 297.5Q67 335 114 340Q135 379 173.0 403.0Q211 427 256 427Q310 427 356.5 389.0Q403 351 413 298Z" />
+</vector>

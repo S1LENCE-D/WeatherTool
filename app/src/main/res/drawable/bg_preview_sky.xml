@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 预览卡片底：模拟白天多云天空渐变（毛玻璃之下的背景层） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:startColor="#4E6E94"
+        android:centerColor="#6E8FB5"
+        android:endColor="#8AA9C9"
+        android:angle="270" />
+    <corners android:radius="16dp" />
+</shape>

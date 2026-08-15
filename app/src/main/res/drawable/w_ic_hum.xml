@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 湿度（opacity 水滴）（提取自 MaterialIcons-Regular.ttf U+E798，与 App 内字形一致） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="15dp"
+    android:height="15dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M256 469Q85 324 85 218Q85 178 99.0 145.5Q113 113 137.0 90.0Q161 67 191.5 55.0Q222 43 256 43Q290 43 320.5 55.0Q351 67 375.0 90.0Q399 113 413.0 145.5Q427 178 427 218Q427 324 256 469ZM167 213Q173 213 177.5 209.5Q182 206 183 200Q187 176 200.0 162.5Q213 149 229.5 143.5Q246 138 260 139Q267 139 272.0 134.5Q277 130 277 123Q277 116 272.5 111.5Q268 107 262 107Q239 105 216.0 114.0Q193 123 175.0 142.5Q157 162 151 195Q150 202 155.0 207.5Q160 213 167 213Z" />
+</vector>

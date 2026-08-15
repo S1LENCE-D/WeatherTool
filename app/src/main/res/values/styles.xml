@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- v9.87：设置半屏弹窗窗口动画（底部滑入/滑出） -->
+    <style name="SettingsSheetAnim" parent="@android:style/Animation">
+        <item name="android:windowEnterAnimation">@anim/settings_sheet_in</item>
+        <item name="android:windowExitAnimation">@anim/settings_sheet_out</item>
+    </style>
+</resources>

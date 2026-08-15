@@ -1,0 +1,347 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 2x4 小组件：今日概览 + 未来 5 日预报 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widgetRoot4"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="14dp">
+
+    <!-- 城市 / 更新时间 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/wCity"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="--"
+            android:textColor="#E6FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium" />
+
+        <TextView
+            android:id="@+id/wTime"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#80FFFFFF"
+            android:textSize="10sp"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <!-- 今日概览 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="5dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/wTodayIcon"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textSize="17sp" />
+
+        <TextView
+            android:id="@+id/wTodayDesc"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="5dp"
+            android:text="--"
+            android:textColor="#E6FFFFFF"
+            android:textSize="13sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium" />
+
+        <TextView
+            android:id="@+id/wTodayRange"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#FF7FB5E8"
+            android:textSize="11sp"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <!-- v9.24：实时详情行（湿度/风/云量/UV，Material 矢量图标 + 数值） -->
+    <LinearLayout
+        android:id="@+id/wExtraRow"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <ImageView
+            android:id="@+id/wIcHum"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:contentDescription="" />
+
+        <TextView
+            android:id="@+id/wHum"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="2dp"
+            android:text=""
+            android:textColor="#B3FFFFFF"
+            android:textSize="11sp"
+            android:maxLines="1" />
+
+        <ImageView
+            android:id="@+id/wIcWind"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="9dp"
+            android:contentDescription="" />
+
+        <TextView
+            android:id="@+id/wWind"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="2dp"
+            android:text=""
+            android:textColor="#B3FFFFFF"
+            android:textSize="11sp"
+            android:maxLines="1" />
+
+        <ImageView
+            android:id="@+id/wIcCloud"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="9dp"
+            android:contentDescription="" />
+
+        <TextView
+            android:id="@+id/wCloud"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="2dp"
+            android:text=""
+            android:textColor="#B3FFFFFF"
+            android:textSize="11sp"
+            android:maxLines="1" />
+
+        <ImageView
+            android:id="@+id/wIcUv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="9dp"
+            android:contentDescription="" />
+
+        <TextView
+            android:id="@+id/wUv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="2dp"
+            android:text=""
+            android:textColor="#B3FFFFFF"
+            android:textSize="11sp"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="5dp"
+        android:background="#26FFFFFF"
+        android:text="" />
+
+    <!-- 未来 5 日预报行 -->
+    <LinearLayout
+        android:id="@+id/wRow0"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="5dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/wDay0"
+            android:layout_width="44dp"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#B3FFFFFF"
+            android:textSize="12sp"
+            android:maxLines="1" />
+
+        <TextView
+            android:id="@+id/wIcon0"
+            android:layout_width="26dp"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textSize="14sp"
+            android:gravity="center_horizontal" />
+
+        <TextView
+            android:id="@+id/wHi0"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text=""
+            android:textColor="#E6FFFFFF"
+            android:textSize="12sp"
+            android:gravity="end"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/wRow1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/wDay1"
+            android:layout_width="44dp"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#B3FFFFFF"
+            android:textSize="12sp"
+            android:maxLines="1" />
+
+        <TextView
+            android:id="@+id/wIcon1"
+            android:layout_width="26dp"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textSize="14sp"
+            android:gravity="center_horizontal" />
+
+        <TextView
+            android:id="@+id/wHi1"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text=""
+            android:textColor="#E6FFFFFF"
+            android:textSize="12sp"
+            android:gravity="end"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/wRow2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/wDay2"
+            android:layout_width="44dp"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#B3FFFFFF"
+            android:textSize="12sp"
+            android:maxLines="1" />
+
+        <TextView
+            android:id="@+id/wIcon2"
+            android:layout_width="26dp"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textSize="14sp"
+            android:gravity="center_horizontal" />
+
+        <TextView
+            android:id="@+id/wHi2"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text=""
+            android:textColor="#E6FFFFFF"
+            android:textSize="12sp"
+            android:gravity="end"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/wRow3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/wDay3"
+            android:layout_width="44dp"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#B3FFFFFF"
+            android:textSize="12sp"
+            android:maxLines="1" />
+
+        <TextView
+            android:id="@+id/wIcon3"
+            android:layout_width="26dp"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textSize="14sp"
+            android:gravity="center_horizontal" />
+
+        <TextView
+            android:id="@+id/wHi3"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text=""
+            android:textColor="#E6FFFFFF"
+            android:textSize="12sp"
+            android:gravity="end"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/wRow4"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/wDay4"
+            android:layout_width="44dp"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#B3FFFFFF"
+            android:textSize="12sp"
+            android:maxLines="1" />
+
+        <TextView
+            android:id="@+id/wIcon4"
+            android:layout_width="26dp"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textSize="14sp"
+            android:gravity="center_horizontal" />
+
+        <TextView
+            android:id="@+id/wHi4"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text=""
+            android:textColor="#E6FFFFFF"
+            android:textSize="12sp"
+            android:gravity="end"
+            android:maxLines="1" />
+    </LinearLayout>
+</LinearLayout>
