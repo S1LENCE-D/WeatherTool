@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 纯涟漪层（无底色），叠加在毛玻璃背景之上，提供按压水波反馈 -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="#403D7BD9">
+    <item android:id="@android:id/mask">
+        <shape android:shape="rectangle">
+            <corners android:radius="22dp" />
+            <solid android:color="#FFFFFF" />
+        </shape>
+    </item>
+</ripple>

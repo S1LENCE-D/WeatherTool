@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v9.28：深色对话框圆角背景（Material 风格统一） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#23252B" />
+    <corners android:radius="20dp" />
+</shape>

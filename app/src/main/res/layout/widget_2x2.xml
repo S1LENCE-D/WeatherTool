@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 2x2 小组件：当日实时天气（城市/时间、大温度、图标、描述） -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widgetRoot2"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:gravity="center_vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/wCity"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="--"
+            android:textColor="#D9FFFFFF"
+            android:textSize="12sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium" />
+
+        <TextView
+            android:id="@+id/wTime"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#80FFFFFF"
+            android:textSize="10sp"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/wTemp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="--°"
+            android:textColor="#FFFFFFFF"
+            android:textSize="34sp"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif-medium" />
+
+        <TextView
+            android:id="@+id/wIcon"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text=""
+            android:textSize="24sp" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/wDesc"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="1dp"
+        android:text=""
+        android:textColor="#B3FFFFFF"
+        android:textSize="11sp"
+        android:maxLines="1" />
+
+    <!-- v9.24：体感 / 湿度 详情行（Material 矢量图标 + 数值，与 App 内字形一致） -->
+    <LinearLayout
+        android:id="@+id/wExtraRow"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/wFeels"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#B3FFFFFF"
+            android:textSize="10sp"
+            android:maxLines="1" />
+
+        <ImageView
+            android:id="@+id/wIcHum"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="7dp"
+            android:contentDescription="" />
+
+        <TextView
+            android:id="@+id/wHum"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="2dp"
+            android:text=""
+            android:textColor="#B3FFFFFF"
+            android:textSize="10sp"
+            android:maxLines="1" />
+    </LinearLayout>
+</LinearLayout>

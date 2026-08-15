@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 小组件浅色圆角背景 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#E6F2F6FA" />
+    <corners android:radius="18dp" />
+</shape>

@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 注意：namespace / versionCode / versionName / minSdk / targetSdk 由 app/build.gradle 统一管理（AGP 8 规范） -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- v9.87-fix：sendExtraCommand（AGPS 注入 force_time/force_xtra）强制要求该权限；
+         normal 级，声明即授予，无需动态申请 -->
+    <uses-permission android:name="android.permission.ACCESS_LOCATION_EXTRA_COMMANDS" />
+    <!-- v9.87-fix：后台定位声明（对齐官方清单模板；本 App 前台定位为主，不主动请求该项，
+         声明仅让系统设置中出现"始终允许"选项，供有需要时用户手动开启） -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- v9.87：前台服务启动凭证（每日天气通知） -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- v9.87：精确闹钟（每日定时通知准时触发；Android 12+ 声明，无权限时代码回退 setAlarmClock） -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
+    <application
+        android:label="简洁天气"
+        android:icon="@drawable/ic_launcher"
+        android:allowBackup="true"
+        android:usesCleartextTraffic="true"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <!-- 正式版作者信息（安装包元数据，可被应用详情/查包工具读取） -->
+        <meta-data
+            android:name="author"
+            android:value="酷安 @Eartecd" />
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".RainMapActivity"
+            android:exported="false" />
+
+        <receiver
+            android:name=".AlarmReceiver"
+            android:exported="false" />
+
+        <!-- v9.78：预警周期闹钟（30 分钟一次，触发短时检查服务） -->
+        <receiver
+            android:name=".AlertAlarmReceiver"
+            android:exported="false" />
+
+        <!-- v9.87：后台缓存刷新闹钟（每小时静默拉取写缓存，goAsync 无服务） -->
+        <receiver
+            android:name=".CacheRefreshReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- v9.84：覆盖安装/更新后恢复定时推送与预警监控闹钟（系统会清除更新前的闹钟） -->
+        <receiver
+            android:name=".UpdateReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- v9.21：桌面小组件。两个独立 Provider 各自固定布局，不再按尺寸切换（拉伸不会换布局） -->
+        <receiver
+            android:name=".WeatherWidgetProvider2x2"
+            android:label="天气 · 当日"
+            android:icon="@drawable/ic_launcher"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info_2x2" />
+        </receiver>
+
+        <receiver
+            android:name=".WeatherWidgetProvider2x4"
+            android:label="天气 · 多日"
+            android:icon="@drawable/ic_launcher"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info_2x4" />
+        </receiver>
+
+        <service
+            android:name=".SpeakService"
+            android:exported="false" />
+
+        <!-- v9.78：预警检查服务（闹钟触发，短时运行自停，无常驻通知） -->
+        <service
+            android:name=".AlertWatchService"
+            android:exported="false" />
+
+        <!-- v9.88：后台常驻服务（前台服务 + 低优先级通知，进程保活） -->
+        <service
+            android:name=".KeepAliveService"
+            android:exported="false" />
+    </application>
+</manifest>

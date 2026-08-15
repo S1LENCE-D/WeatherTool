@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp"
+    android:height="64dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- 黑白简笔画太阳：细黑线圆环 + 8 条细黑光芒（无填充） -->
+    <path
+        android:pathData="M12,6.5 a5.5,5.5 0 1,0 0.01,0 z"
+        android:strokeColor="#1A1A1A"
+        android:strokeWidth="1.0"
+        android:fillColor="#00000000" />
+    <!-- 正交光芒 -->
+    <group>
+        <path android:pathData="M12,5.5 L12,1.5" android:strokeColor="#1A1A1A" android:strokeWidth="1.0" android:strokeLineCap="round" />
+        <path android:pathData="M12,18.5 L12,22.5" android:strokeColor="#1A1A1A" android:strokeWidth="1.0" android:strokeLineCap="round" />
+        <path android:pathData="M5.5,12 L1.5,12" android:strokeColor="#1A1A1A" android:strokeWidth="1.0" android:strokeLineCap="round" />
+        <path android:pathData="M18.5,12 L22.5,12" android:strokeColor="#1A1A1A" android:strokeWidth="1.0" android:strokeLineCap="round" />
+    </group>
+    <!-- 对角光芒（旋转 45° 复用） -->
+    <group android:rotation="45" android:pivotX="12" android:pivotY="12">
+        <path android:pathData="M12,5.5 L12,1.5" android:strokeColor="#1A1A1A" android:strokeWidth="1.0" android:strokeLineCap="round" />
+        <path android:pathData="M12,18.5 L12,22.5" android:strokeColor="#1A1A1A" android:strokeWidth="1.0" android:strokeLineCap="round" />
+        <path android:pathData="M5.5,12 L1.5,12" android:strokeColor="#1A1A1A" android:strokeWidth="1.0" android:strokeLineCap="round" />
+        <path android:pathData="M18.5,12 L22.5,12" android:strokeColor="#1A1A1A" android:strokeWidth="1.0" android:strokeLineCap="round" />
+    </group>
+</vector>

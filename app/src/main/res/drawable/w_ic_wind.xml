@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 风速（air 三波浪线）（提取自 MaterialIcons-Regular.ttf U+E3BA，与 App 内字形一致） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="15dp"
+    android:height="15dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M135.5 135.5Q186 85 256.0 85.0Q326 85 376.5 135.5Q427 186 427.0 256.0Q427 326 376.5 376.5Q326 427 256.0 427.0Q186 427 135.5 376.5Q85 326 85.0 256.0Q85 186 135.5 135.5ZM105.5 406.5Q168 469 256.0 469.0Q344 469 406.5 406.5Q469 344 469.0 256.0Q469 168 406.5 105.5Q344 43 256.0 43.0Q168 43 105.5 105.5Q43 168 43.0 256.0Q43 344 105.5 406.5ZM277 363V277H363V235H277V149H235V235H149V277H235V363Z" />
+</vector>

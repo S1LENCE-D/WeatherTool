@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v9.62：浅色对话框：M3 surfaceContainerHigh + 28dp 圆角 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#E6E9F0" />
+    <corners android:radius="28dp" />
+</shape>

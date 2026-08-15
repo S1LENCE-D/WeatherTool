@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 单选圆点：未选中 = 灰描边空心圆（浅色主题） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="#00000000" />
+    <size android:width="22dp" android:height="22dp" />
+    <stroke android:width="1.5dp" android:color="#664A5A6A" />
+</shape>

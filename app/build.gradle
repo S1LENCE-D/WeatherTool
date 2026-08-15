@@ -1,0 +1,57 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.simpleweather.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.simpleweather.app'
+        minSdk 24
+        targetSdk 33
+        versionCode 97
+        versionName '9.87 · 酷安@Eartecd'
+    }
+
+    buildTypes {
+        release {
+            // 零第三方依赖、无混淆配置，保持可读性；上架前可按需开启
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // 签名：支持环境变量注入（GitHub Actions secrets / 本地发布脚本）。
+            // 未设置环境变量时跳过签名（本地默认行为不变），设置后自动使用正式签名。
+            if (System.getenv('SIGNING_KEYSTORE') != null) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    signingConfigs {
+        release {
+            // 仅当环境变量注入签名时才配置，避免 file(null) 报错
+            if (System.getenv('SIGNING_KEYSTORE') != null) {
+                storeFile file(System.getenv('SIGNING_KEYSTORE'))
+                storePassword System.getenv('SIGNING_KEYSTORE_PASS')
+                keyAlias System.getenv('SIGNING_KEY_ALIAS')
+                keyPassword System.getenv('SIGNING_KEY_PASS')
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    // 历史遗留源码（java_old/）不参与编译
+    sourceSets {
+        main {
+            java.srcDirs = ['src/main/java']
+        }
+    }
+
+    lint {
+        abortOnError false
+    }
+}
