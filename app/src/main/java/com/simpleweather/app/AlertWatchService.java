@@ -21,8 +21,10 @@ public class AlertWatchService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        Diag.i("AlertWatchService.onStartCommand");
         // 开关已关（可能用户刚在设置里关闭）：自停
         if (!AlertWatcher.enabled(this)) {
+            Diag.i("服务启动但开关已关，自停");
             stopSelf();
             return START_NOT_STICKY;
         }
@@ -34,9 +36,13 @@ public class AlertWatchService extends Service {
     private void checkAlerts() {
         final String city = AlertWatcher.city(this);
         if (city == null || city.isEmpty()) {   // 尚未定位成功，等下一轮闹钟
+            Diag.i("city 快照为空，跳过本轮");
             stopSelf();
             return;
         }
+        Diag.i("开始检查预警 city=" + city
+                + " prov=" + AlertWatcher.prov(this)
+                + " dist=" + AlertWatcher.dist(this));
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -46,9 +52,11 @@ public class AlertWatchService extends Service {
                     final WeatherApi.AlarmResult r =
                             WeatherApi.fetchAlarms(city, prov, dist);
                     if (r == null || r.local.isEmpty()) {
+                        Diag.i("fetchAlarms 无结果或空列表 r=" + r);
                         stopSelf();
                         return;
                     }
+                    Diag.i("fetchAlarms 成功，预警条数=" + r.local.size());
                     Set<String> done = AlertWatcher.notified(AlertWatchService.this);
                     String day = AlertWatcher.todayKey();
 
@@ -68,9 +76,12 @@ public class AlertWatchService extends Service {
                         }
                     }
                     if (fresh <= 0 || actives.isEmpty()) {
+                        Diag.i("无新增预警 fresh=" + fresh + " actives=" + actives.size()
+                                + "（已通知过或非黄色及以上）");
                         stopSelf();
                         return;
                     }
+                    Diag.i("有新增预警 fresh=" + fresh + "，发送通知");
                     AlertWatcher.rememberNotified(AlertWatchService.this, done);
 
                     // 正文：逐条列出（最多 5 条，其余计数）

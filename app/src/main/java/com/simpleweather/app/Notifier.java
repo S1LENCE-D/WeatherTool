@@ -6,6 +6,7 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.os.Build;
 
 /**
@@ -136,6 +137,20 @@ public final class Notifier {
     /** 预警提醒通知：标题带等级前缀，正文列出全部生效预警，按等级着色 */
     public static void notifyAlert(Context c, String title, String body, int levelColor) {
         ensureChannels(c);
+        NotificationManager nm =
+                (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null) return;
+        // v9.87-diag：Android 13+ 通知权限状态检查
+        if (Build.VERSION.SDK_INT >= 33) {
+            boolean perm = c.checkSelfPermission("android.permission.POST_NOTIFICATIONS")
+                    == PackageManager.PERMISSION_GRANTED;
+            boolean enabled = nm.areNotificationsEnabled();
+            Diag.i("notifyAlert: SDK>=33 POST_NOTIFICATIONS=" + perm
+                    + " areNotificationsEnabled=" + enabled);
+            if (!perm || !enabled) {
+                Diag.i("notifyAlert: 通知权限未授予，通知将被系统丢弃!");
+            }
+        }
         Notification.Builder b = Build.VERSION.SDK_INT >= 26
                 ? new Notification.Builder(c, CH_ALERT)
                 : new Notification.Builder(c);
@@ -149,10 +164,8 @@ public final class Notifier {
         b.setPriority(Notification.PRIORITY_HIGH);
         if (levelColor != 0) b.setColor(levelColor);
         b.setDefaults(Notification.DEFAULT_ALL);
-        NotificationManager nm =
-                (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
-        if (nm == null) return;
         nm.notify(ID_ALERT, b.build());
+        Diag.i("notifyAlert: 已发送 id=" + ID_ALERT + " title=" + title);
     }
 
     /** v9.87test：自定义气象提醒通知（温度 / 湿度 / 紫外线超阈值） */
