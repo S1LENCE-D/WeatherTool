@@ -2,7 +2,7 @@
 
 > 极简、纯净、零广告的安卓天气应用 · 酷安 @Eartecd
 >
-> 当前版本：**v9.87-fix1**（versionCode 98）
+> 当前版本：**v9.87-fix2**（versionCode 99）
 
 零第三方依赖，纯 Java + Android framework 编写，单 APK 约 800KB。
 

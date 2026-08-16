@@ -55,16 +55,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.json.JSONObject
-import top.yukonga.miuix.kmp.theme.ColorSchemeMode
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.theme.ThemeController
 
 /**
  * v9.90：Compose 新界面（实验性）。
  *
  * 双主题引擎：
  *   - 风格 m3   ：MaterialTheme（Material 3，蓝种子 #0061A4，与经典界面同色板）
- *   - 风格 miuix：MiuixTheme（小米 HyperOS 风格组件库，keyColor #3482FF 小米蓝）
+ *   - Material 3：MaterialTheme（与经典界面同源色板）
  *
  * 与经典界面完全兼容：复用 WeatherCenter / WeatherCache / WeatherApi 等
  * 纯 Java 逻辑层，可随时在设置中切回经典 View 界面。
@@ -98,34 +95,21 @@ class ComposeWeatherActivity : ComponentActivity() {
     @Composable
     fun AppRoot() {
         val dark = Theme.isDark(this@ComposeWeatherActivity)
-        val style = Theme.style(this@ComposeWeatherActivity)
-        if (Theme.STYLE_MIUIX.equals(style)) {
-            // MIUIX：Miuix HyperOS 风格，小米蓝种子
-            val controller = remember {
-                ThemeController(
-                    colorSchemeMode = ColorSchemeMode.System,
-                    keyColor = Color(0xFF3482FF),
-                    isDark = dark
-                )
-            }
-            MiuixTheme(controller = controller) { MainScreen() }
-        } else {
-            // Material 3：与经典界面同源色板
-            val scheme = if (dark) darkColorScheme(
-                primary = Color(0xFFA2C8FF),
-                primaryContainer = Color(0xFF00497C),
-                onPrimaryContainer = Color(0xFFA2C8FF),
-                surface = Color(0xFF0D1526),
-                surfaceVariant = Color(0xFF2B2D33),
-            ) else lightColorScheme(
-                primary = Color(0xFF0061A4),
-                primaryContainer = Color(0xFFD2E4FF),
-                onPrimaryContainer = Color(0xFF001D36),
-                surface = Color(0xFFF6F7F9),
-                surfaceVariant = Color(0xFFE6E9F0),
-            )
-            MaterialTheme(colorScheme = scheme) { MainScreen() }
-        }
+        // Material 3：与经典界面同源色板
+        val scheme = if (dark) darkColorScheme(
+            primary = Color(0xFFA2C8FF),
+            primaryContainer = Color(0xFF00497C),
+            onPrimaryContainer = Color(0xFFA2C8FF),
+            surface = Color(0xFF0D1526),
+            surfaceVariant = Color(0xFF2B2D33),
+        ) else lightColorScheme(
+            primary = Color(0xFF0061A4),
+            primaryContainer = Color(0xFFD2E4FF),
+            onPrimaryContainer = Color(0xFF001D36),
+            surface = Color(0xFFF6F7F9),
+            surfaceVariant = Color(0xFFE6E9F0),
+        )
+        MaterialTheme(colorScheme = scheme) { MainScreen() }
     }
 
     // ---------- 主界面 ----------
@@ -134,11 +118,9 @@ class ComposeWeatherActivity : ComponentActivity() {
     @Composable
     fun MainScreen() {
         val dark = Theme.isDark(this@ComposeWeatherActivity)
-        val miuix = Theme.isMiuix(this@ComposeWeatherActivity)
         val accent = Color(Theme.accent(this@ComposeWeatherActivity))
         Scaffold(
-            containerColor = if (miuix) Color(if (dark) 0xFF10151C else 0xFFEDF1F6)
-                             else Color(if (dark) 0xFF0D1526 else 0xFFF6F7F9),
+            containerColor = Color(if (dark) 0xFF0D1526 else 0xFFF6F7F9),
             topBar = {
                 TopAppBar(
                     title = { Text("简洁天气 · Compose", fontSize = 17.sp) },
@@ -297,18 +279,10 @@ class ComposeWeatherActivity : ComponentActivity() {
                     Text("界面引擎", fontSize = 12.sp,
                          color = Color(Theme.textSecondary(this@ComposeWeatherActivity)),
                          modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
-                    RadioRow("Compose 新界面", "Compose + Miuix 双主题（当前）",
+                    RadioRow("Compose 新界面", "Compose + Material 3（当前）",
                              Theme.isCompose(this@ComposeWeatherActivity), { pickEngine(Theme.ENGINE_COMPOSE) })
                     RadioRow("经典界面", "Java View · 稳定兜底",
                              !Theme.isCompose(this@ComposeWeatherActivity), { pickEngine(Theme.ENGINE_VIEW) })
-
-                    Text("界面风格", fontSize = 12.sp,
-                         color = Color(Theme.textSecondary(this@ComposeWeatherActivity)),
-                         modifier = Modifier.padding(top = 14.dp, bottom = 4.dp))
-                    RadioRow("Material 3", "蓝种子 #0061A4",
-                             !Theme.isMiuix(this@ComposeWeatherActivity), { pickStyle(Theme.STYLE_M3) })
-                    RadioRow("MIUIX", "HyperOS 风格 · 小米蓝 #3482FF",
-                             Theme.isMiuix(this@ComposeWeatherActivity), { pickStyle(Theme.STYLE_MIUIX) })
 
                     Text("外观", fontSize = 12.sp,
                          color = Color(Theme.textSecondary(this@ComposeWeatherActivity)),
@@ -341,12 +315,6 @@ class ComposeWeatherActivity : ComponentActivity() {
         } else {
             recreate()
         }
-    }
-
-    private fun pickStyle(s: String) {
-        showSettings = false
-        Theme.setStyle(this, s)
-        recreate()
     }
 
     private fun pickMode(m: String) {

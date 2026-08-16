@@ -12,8 +12,8 @@ android {
         applicationId 'com.simpleweather.app'
         minSdk 24
         targetSdk 33
-        versionCode 98
-        versionName '9.87-fix1'
+        versionCode 99
+        versionName '9.87-fix2'
     }
 
     signingConfigs {
@@ -32,7 +32,7 @@ android {
 
     buildTypes {
         release {
-            // v9.90：开 R8 裁剪 + 资源收缩（Compose/Miuix 库自带 consumer 规则）
+            // v9.90：开 R8 裁剪 + 资源收缩（Compose 库自带 consumer 规则）
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
@@ -78,10 +78,6 @@ dependencies {
     // v9.90：仅用 Icons.Default 基础图标（Refresh/Settings 均在 core 子集内），不背 extended 全家桶
     implementation 'androidx.compose.material:material-icons-core'
 
-    // Miuix：小米 HyperOS 设计风格组件库（Compose Multiplatform）
-    implementation 'top.yukonga.miuix.kmp:miuix-ui-android:0.9.3'
-    implementation 'top.yukonga.miuix.kmp:miuix-preference-android:0.9.3'
-    implementation 'top.yukonga.miuix.kmp:miuix-squircle-android:0.9.3'
 
     // 现有 Java 逻辑层复用（无第三方依赖）
 }

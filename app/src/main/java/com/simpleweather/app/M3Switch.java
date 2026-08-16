@@ -92,7 +92,7 @@ public class M3Switch extends View {
         super.onDraw(cv);
         boolean dark = Theme.isDark(getContext());
         int trackOff = dark ? 0xFF49454F : 0xFFCAC4D0;   // surfaceVariant
-        int trackOn = Theme.accent(getContext());        // primary（v9.90：跟随 M3 / MIUIX 风格）
+        int trackOn = Theme.accent(getContext());        // primary
         int thumbOff = dark ? 0xFF2B2D33 : 0xFFFDFCFF;   // surfaceContainerHighest
         int thumbOn = dark ? 0xFF1B1B1F : 0xFFFFFFFF;    // onPrimary
 

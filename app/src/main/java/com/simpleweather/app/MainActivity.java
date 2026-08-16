@@ -4107,21 +4107,11 @@ public class MainActivity extends Activity {
                 !Theme.isCompose(this), pager, new Runnable() {
                     @Override public void run() { pickEngine("view", d); }
                 });
-        stOption(page, "engine_compose", "Compose 新界面", "Compose + Miuix · 双主题", dark,
+        stOption(page, "engine_compose", "Compose 新界面", "Compose + Material 3 · 实验性", dark,
                 Theme.isCompose(this), pager, new Runnable() {
                     @Override public void run() { pickEngine("compose", d); }
                 });
 
-        // v9.90：界面风格（Material 3 / MIUIX）
-        stSection(page, "界面风格", "Material 3 蓝种 #0061A4 · MIUIX 小米蓝 #3482FF", dark);
-        stOption(page, "style_m3", "Material 3", "Material Design 3 语义色板", dark,
-                !Theme.isMiuix(this), pager, new Runnable() {
-                    @Override public void run() { pickStyle("m3", d); }
-                });
-        stOption(page, "style_miuix", "MIUIX", "HyperOS 风格 · 小米蓝种子", dark,
-                Theme.isMiuix(this), pager, new Runnable() {
-                    @Override public void run() { pickStyle("miuix", d); }
-                });
         return page;
     }
 
@@ -4144,14 +4134,6 @@ public class MainActivity extends Activity {
         } else {
             recreate();
         }
-    }
-
-    /** v9.90：切换界面风格（M3 / MIUIX），立即生效 */
-    private void pickStyle(String s, Dialog d) {
-        if (s.equals(Theme.style(this))) { d.dismiss(); return; }
-        Theme.setStyle(this, s);
-        reopenSettings = true;
-        recreate();
     }
 
     private LinearLayout buildLocBgPage(final boolean dark, final Dialog d, final SettingsPager pager) {

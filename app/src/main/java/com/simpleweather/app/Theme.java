@@ -10,9 +10,8 @@ import android.view.View;
  * 所有界面颜色一律经由此处取用，保证双主题统一。
  *
  * v9.90：新增两个维度——
- *   引擎 engine：view（经典 Java View 界面，默认）/ compose（Compose + Miuix 新界面）
- *   风格 style ：m3（Material 3 蓝种子 #0061A4）/ miuix（小米 HyperOS 风，种子 #3482FF）
- * 两个维度相互独立：经典界面走 View 色板，Compose 界面走 MiuixTheme / MaterialTheme。
+ *   引擎 engine：view（经典 Java View 界面，默认）/ compose（Compose + Material 3 新界面）
+ * 经典界面走 View 色板，Compose 界面走 MaterialTheme（与经典界面同源色板）。
  */
 public class Theme {
 
@@ -38,28 +37,6 @@ public class Theme {
 
     public static boolean isCompose(Context c) {
         return ENGINE_COMPOSE.equals(engine(c));
-    }
-
-    // ---------- v9.90：界面风格（M3 / MIUIX） ----------
-
-    public static final String STYLE_KEY = "style";   // "m3" | "miuix"
-    public static final String STYLE_M3 = "m3";
-    public static final String STYLE_MIUIX = "miuix";
-
-    /** 当前界面风格（默认 Material 3） */
-    public static String style(Context c) {
-        return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .getString(STYLE_KEY, STYLE_M3);
-    }
-
-    public static void setStyle(Context c, String s) {
-        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .edit().putString(STYLE_KEY, s).apply();
-    }
-
-    /** 是否 MIUIX（HyperOS）风格 */
-    public static boolean isMiuix(Context c) {
-        return STYLE_MIUIX.equals(style(c));
     }
 
     public static String mode(Context c) {
@@ -99,54 +76,45 @@ public class Theme {
         return isDark(c) ? 0xFF55606B : 0xFF8B98A5;
     }
 
-    /** 强调蓝（v9.62：Material 3 蓝种子 #0061A4，深色=浅蓝亮字；
-     *  v9.90：MIUIX 风格改用小米蓝 #3482FF，更亮更活泼） */
+    /** 强调蓝（v9.62：Material 3 蓝种子 #0061A4，深色=浅蓝亮字） */
     public static int accent(Context c) {
-        if (isMiuix(c)) return isDark(c) ? 0xFF9DC8FF : 0xFF3482FF;
         return isDark(c) ? 0xFFA2C8FF : 0xFF0061A4;
     }
 
-    /** 强调蓝（亮版，温度条渐变色；MIUIX 走对应蓝系） */
+    /** 强调蓝（亮版，温度条渐变色） */
     public static int accentLight(Context c) {
-        if (isMiuix(c)) return isDark(c) ? 0xFF8FBDFF : 0xFF8FB8FF;
         return isDark(c) ? 0xFF8FC8FF : 0xFF8AB6F9;
     }
 
     // ---------- v9.62：Material 3 tonal 色板（蓝种子 #0061A4） ----------
 
-    /** M3 surfaceContainerHigh：弹窗/面板表面（MIUIX 走 HyperOS 浅灰蓝/深灰蓝） */
+    /** M3 surfaceContainerHigh：弹窗/面板表面 */
     public static int surfaceContainerHigh(Context c) {
-        if (isMiuix(c)) return isDark(c) ? 0xFF272C35 : 0xFFE9EDF4;
         return isDark(c) ? 0xFF2B2D33 : 0xFFE6E9F0;
     }
 
-    /** M3 surfaceContainerLow：建议卡等内嵌卡片表面（MIUIX 略偏蓝） */
+    /** M3 surfaceContainerLow：建议卡等内嵌卡片表面 */
     public static int surfaceContainerLow(Context c) {
-        if (isMiuix(c)) return isDark(c) ? 0xFF1C2129 : 0xFFF6F8FB;
         return isDark(c) ? 0xFF1E2025 : 0xFFF6F7F9;
     }
 
-    /** M3 primaryContainer：tonal 按钮/选中底（MIUIX 小米蓝容器） */
+    /** M3 primaryContainer：tonal 按钮/选中底 */
     public static int primaryContainer(Context c) {
-        if (isMiuix(c)) return isDark(c) ? 0xFF1E4C8E : 0xFFD8E5FF;
         return isDark(c) ? 0xFF00497C : 0xFFD2E4FF;
     }
 
     /** M3 onPrimaryContainer：tonal 按钮/选中字 */
     public static int onPrimaryContainer(Context c) {
-        if (isMiuix(c)) return isDark(c) ? 0xFFD8E5FF : 0xFF002E6E;
         return isDark(c) ? 0xFFA2C8FF : 0xFF001D36;
     }
 
     /** M3 outlineVariant：描边 */
     public static int outlineVariant(Context c) {
-        if (isMiuix(c)) return isDark(c) ? 0xFF3F4652 : 0xFFC5CCD8;
         return isDark(c) ? 0xFF44474E : 0xFFC4C6D0;
     }
 
-    /** M3 涟漪色（MIUIX 小米蓝） */
+    /** M3 涟漪色 */
     public static int ripple(Context c) {
-        if (isMiuix(c)) return isDark(c) ? 0x339DC8FF : 0x333482FF;
         return isDark(c) ? 0x33A2C8FF : 0x330061A4;
     }
 
@@ -177,21 +145,13 @@ public class Theme {
 
     /** 亮背景（玻璃卡叠在亮渐变上）→ 深色字组；暗背景 → 浅色字组。
      *  次级/强调全部实色化，保证毛玻璃上对比度足够明显。
-     *  v9.90：强调色跟随风格（M3 深蓝 / MIUIX 小米蓝）。 */
+     *  强调色为 M3 深蓝。 */
     private static final int[] CARD_DARK_M3 = {0xFF1F2A36, 0xFF5C6B7A, 0xFF0061A4};
     private static final int[] CARD_LIGHT_M3 = {0xFFFFFFFF, 0xFFD9E2EC, 0xFFA2C8FF};
-    private static final int[] CARD_DARK_MIUIX = {0xFF1F2A36, 0xFF5C6B7A, 0xFF3482FF};
-    private static final int[] CARD_LIGHT_MIUIX = {0xFFFFFFFF, 0xFFD9E2EC, 0xFF9DC8FF};
 
     /** 按卡片所在背景色返回 {primary, secondary, accent} */
-    public static int[] cardTextColors(int bg, boolean miuix) {
-        if (miuix) return luma(bg) > 0.48f ? CARD_DARK_MIUIX : CARD_LIGHT_MIUIX;
-        return luma(bg) > 0.48f ? CARD_DARK_M3 : CARD_LIGHT_M3;
-    }
-
-    /** 兼容旧签名（按 M3 风格） */
     public static int[] cardTextColors(int bg) {
-        return cardTextColors(bg, false);
+        return luma(bg) > 0.48f ? CARD_DARK_M3 : CARD_LIGHT_M3;
     }
 
     /** 分割线 */
