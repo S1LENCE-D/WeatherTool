@@ -1,4 +1,7 @@
-// 根构建脚本：仅声明 Android Gradle Plugin 版本，具体配置在 app/build.gradle
+// 根构建脚本：AGP + Kotlin + Compose 插件版本声明
 plugins {
-    id 'com.android.application' version '8.5.2' apply false
+    id 'com.android.application' version '9.3.1' apply false
+    // opt out 内置 Kotlin（Miuix 0.9.3 需 Kotlin 2.4 编译器），回到经典 KGP
+    id 'org.jetbrains.kotlin.android' version '2.4.10' apply false
+    id 'org.jetbrains.kotlin.plugin.compose' version '2.4.10' apply false
 }

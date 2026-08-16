@@ -200,12 +200,7 @@ public class RainMapActivity extends Activity {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);                        // localStorage
         s.setDatabaseEnabled(true);                          // WebSQL
-        s.setAppCacheEnabled(true);                          // AppCache
-        try {
-            s.setAppCachePath(getCacheDir().getAbsolutePath() + "/webcache");
-            // v9.81：给 WebView 应用缓存设 10MB 硬上限，防数据膨胀
-            s.setAppCacheMaxSize(10L * 1024 * 1024);
-        } catch (Exception ignored) { }
+        // v9.90：AppCache 系列 API 已从 API 37 的 android.jar 移除（现代 WebView 自带缓存），不再设置
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         s.setSupportZoom(true);
         s.setBuiltInZoomControls(true);

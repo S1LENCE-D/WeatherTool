@@ -15,3 +15,7 @@ gen/
 
 # 内部文档，不入库
 APP架构梳理.md
+EXPERIENCE_*.md
+
+# 已弃用/未采用的 MIUIX 独立工程（本地保留，不纳入仓库）
+weathertool-miuix/

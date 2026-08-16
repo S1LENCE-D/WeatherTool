@@ -30,6 +30,10 @@ public final class WeatherSources {
     private static final String K_KEY_S = "key_seniverse";
     private static final String K_KEY_C = "key_caiyun";
     private static final String K_KEY_A = "key_amap";
+    // v9.87-fix1：和风支持个人专属 API Host（自建中转/代理域名），留空用官方 devapi
+    private static final String K_HOST_Q = "host_qweather";
+    /** 和风官方默认 Host */
+    private static final String DEFAULT_HOST_Q = "https://devapi.qweather.com";
 
     // ---------------- 配置读写 ----------------
 
@@ -67,7 +71,24 @@ public final class WeatherSources {
         e.apply();
     }
 
-    /** 恢复默认源（Open-Meteo，免 Key 开箱即用），清空全部源的 Key */
+    /** 和风个人专属 API Host（返回空串表示未配置，走官方默认） */
+    public static String qHost(Context c) {
+        return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getString(K_HOST_Q, "");
+    }
+
+    /** 保存和风 API Host；统一规整：去空白、去尾部斜杠，未填 https:// 前缀则自动补 */
+    public static void saveHost(Context c, String host) {
+        String h = host == null ? "" : host.trim();
+        while (h.endsWith("/")) h = h.substring(0, h.length() - 1);
+        if (!h.isEmpty() && !h.startsWith("http://") && !h.startsWith("https://")) {
+            h = "https://" + h;
+        }
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putString(K_HOST_Q, h).apply();
+    }
+
+    /** 恢复默认源（Open-Meteo，免 Key 开箱即用），清空全部源的 Key 与 Host */
     public static void reset(Context c) {
         c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putString(K_TYPE, OPEN_METEO)
@@ -75,6 +96,7 @@ public final class WeatherSources {
                 .putString(K_KEY_S, "")
                 .putString(K_KEY_C, "")
                 .putString(K_KEY_A, "")
+                .putString(K_HOST_Q, "")
                 .apply();
     }
 
@@ -98,7 +120,7 @@ public final class WeatherSources {
         if (!OPEN_METEO.equals(t) && (k == null || k.trim().isEmpty())) {
             return WeatherApi.fetch(lat, lng);
         }
-        if (QWEATHER.equals(t)) return qweather(lat, lng, k);
+        if (QWEATHER.equals(t)) return qweather(lat, lng, k, qHost(c));
         if (SENIVERSE.equals(t)) return seniverse(lat, lng, k);
         if (CAIYUN.equals(t)) return caiyun(lat, lng, k);
         if (AMAP.equals(t)) return amap(lat, lng, k);
@@ -107,11 +129,16 @@ public final class WeatherSources {
 
     // ---------------- 配置前测试 ----------------
 
-    /** 用北京坐标真实请求一次，校验能否正确解析出温度与天气描述 */
+    /** 用北京坐标真实请求一次，校验能否正确解析出温度与天气描述（和风用已保存 Host） */
     public static TestResult test(Context c, String t, String k) {
+        return test(c, t, k, qHost(c));
+    }
+
+    /** 测试重载：可指定和风 Host（设置页在未保存时用输入框临时值测试） */
+    public static TestResult test(Context c, String t, String k, String host) {
         try {
             JSONObject j;
-            if (QWEATHER.equals(t)) j = qweather(39.9042, 116.4074, k);
+            if (QWEATHER.equals(t)) j = qweather(39.9042, 116.4074, k, host);
             else if (SENIVERSE.equals(t)) j = seniverse(39.9042, 116.4074, k);
             else if (CAIYUN.equals(t)) j = caiyun(39.9042, 116.4074, k);
             else if (AMAP.equals(t)) j = amap(39.9042, 116.4074, k);
@@ -139,13 +166,15 @@ public final class WeatherSources {
 
     // ---------------- 和风天气（v7） ----------------
 
-    static JSONObject qweather(double lat, double lng, String key) throws Exception {
+    static JSONObject qweather(double lat, double lng, String key, String host) throws Exception {
         String loc = lng + "," + lat;
+        String base = host == null || host.trim().isEmpty() ? DEFAULT_HOST_Q : host.trim();
+        while (base.endsWith("/")) base = base.substring(0, base.length() - 1);
         // v9.87test：补充紫外线指数（生活指数 type=5），保持 Open-Meteo 的 UV 功能不缺失
         double uvNow = -1;
         try {
             JSONObject uvJ = WeatherApi.getJsonAuto(
-                    "https://devapi.qweather.com/v7/indices/1d?type=5&location=" + loc + "&key=" + key,
+                    base + "/v7/indices/1d?type=5&location=" + loc + "&key=" + key,
                     12000, 12000);
             JSONArray uvd = uvJ.optJSONArray("daily");
             if (uvd != null && uvd.length() > 0) {
@@ -153,15 +182,15 @@ public final class WeatherSources {
             }
         } catch (Exception ignored) { }
         JSONObject nowJ = WeatherApi.getJsonAuto(
-                "https://devapi.qweather.com/v7/weather/now?location=" + loc + "&key=" + key,
+                base + "/v7/weather/now?location=" + loc + "&key=" + key,
                 12000, 12000);
         JSONObject n = nowJ.getJSONObject("now");
         JSONObject h24 = WeatherApi.getJsonAuto(
-                "https://devapi.qweather.com/v7/weather/24h?location=" + loc + "&key=" + key,
+                base + "/v7/weather/24h?location=" + loc + "&key=" + key,
                 12000, 12000);
         JSONArray hArr = h24.getJSONArray("hourly");
         JSONObject d7 = WeatherApi.getJsonAuto(
-                "https://devapi.qweather.com/v7/weather/7d?location=" + loc + "&key=" + key,
+                base + "/v7/weather/7d?location=" + loc + "&key=" + key,
                 12000, 12000);
         JSONArray dArr = d7.getJSONArray("daily");
 

@@ -41,6 +41,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- v9.90：Compose 新界面（实验性，设置中可切换引擎） -->
+        <activity
+            android:name=".ComposeWeatherActivity"
+            android:exported="false" />
         <activity
             android:name=".RainMapActivity"
             android:exported="false" />

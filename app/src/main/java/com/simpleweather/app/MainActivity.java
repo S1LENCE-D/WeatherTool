@@ -160,6 +160,12 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // v9.90：Compose 引擎开关打开时，转发到 Compose 新界面（经典界面兜底）
+        if (Theme.isCompose(this)) {
+            startActivity(new Intent(this, ComposeWeatherActivity.class));
+            finish();
+            return;
+        }
         // v9.87-diag：启动时报告推送链路关键权限状态
         try {
             StringBuilder sb = new StringBuilder("启动诊断: SDK=")
@@ -2489,7 +2495,7 @@ public class MainActivity extends Activity {
                     cur.optDouble("uv_index", -1), cols);
             String sr = WeatherApi.hhmm(daily.getJSONArray("sunrise").getString(0));
             String ss = WeatherApi.hhmm(daily.getJSONArray("sunset").getString(0));
-            sunTimeText.setText("日出 " + sr + "     ·     日落 " + ss);
+            sunTimeText.setText("日出 " + sr + " · 日落 " + ss);
             // v9.87：日出日落弧线按卡片背景明暗自适应配色，太阳按背景亮度微调
             sunArc.setColors(cols[1],
                     bgLight ? 0xFFF0A020 : 0xFFFFC94D,
@@ -4094,12 +4100,56 @@ public class MainActivity extends Activity {
                 "light".equals(cur), pager, new Runnable() {
                     @Override public void run() { pickTheme("light", d); }
                 });
+
+        // v9.90：界面引擎（经典 View / Compose 新界面）
+        stSection(page, "界面引擎", "实验性 Compose 界面，可在两套 UI 间随时切换", dark);
+        stOption(page, "engine_view", "经典界面", "Java View · 稳定默认", dark,
+                !Theme.isCompose(this), pager, new Runnable() {
+                    @Override public void run() { pickEngine("view", d); }
+                });
+        stOption(page, "engine_compose", "Compose 新界面", "Compose + Miuix · 双主题", dark,
+                Theme.isCompose(this), pager, new Runnable() {
+                    @Override public void run() { pickEngine("compose", d); }
+                });
+
+        // v9.90：界面风格（Material 3 / MIUIX）
+        stSection(page, "界面风格", "Material 3 蓝种 #0061A4 · MIUIX 小米蓝 #3482FF", dark);
+        stOption(page, "style_m3", "Material 3", "Material Design 3 语义色板", dark,
+                !Theme.isMiuix(this), pager, new Runnable() {
+                    @Override public void run() { pickStyle("m3", d); }
+                });
+        stOption(page, "style_miuix", "MIUIX", "HyperOS 风格 · 小米蓝种子", dark,
+                Theme.isMiuix(this), pager, new Runnable() {
+                    @Override public void run() { pickStyle("miuix", d); }
+                });
         return page;
     }
 
     private void pickTheme(String m, Dialog d) {
         if (m.equals(Theme.mode(this))) { d.dismiss(); return; }
         Theme.setMode(this, m);
+        reopenSettings = true;
+        recreate();
+    }
+
+    /** v9.90：切换界面引擎（compose 时立即进入新界面；view 时留在经典界面） */
+    private void pickEngine(String e, Dialog d) {
+        if (Theme.ENGINE_COMPOSE.equals(e) && Theme.isCompose(this)) { d.dismiss(); return; }
+        if (Theme.ENGINE_VIEW.equals(e) && !Theme.isCompose(this)) { d.dismiss(); return; }
+        Theme.setEngine(this, e);
+        d.dismiss();
+        if (Theme.ENGINE_COMPOSE.equals(e)) {
+            startActivity(new Intent(this, ComposeWeatherActivity.class));
+            finish();
+        } else {
+            recreate();
+        }
+    }
+
+    /** v9.90：切换界面风格（M3 / MIUIX），立即生效 */
+    private void pickStyle(String s, Dialog d) {
+        if (s.equals(Theme.style(this))) { d.dismiss(); return; }
+        Theme.setStyle(this, s);
         reopenSettings = true;
         recreate();
     }
@@ -4308,46 +4358,52 @@ public class MainActivity extends Activity {
         final String[] selType = { initType };
         final OptionRow[] rows = new OptionRow[5];
         final EditText keyInput = new EditText(this);
+        final EditText hostInput = new EditText(this);
         final TextView status = new TextView(this);
 
         rows[0] = stOption(page, WeatherSources.OPEN_METEO, "Open-Meteo", "备用源 · 无需密钥", dark,
                 WeatherSources.OPEN_METEO.equals(initType), pager, new Runnable() {
                     @Override public void run() {
                         selType[0] = WeatherSources.OPEN_METEO;
-                        refreshSourceUi(rows, selType[0], keyInput);
+                        refreshSourceUi(rows, selType[0], keyInput, hostInput);
                     }
                 });
         rows[1] = stOption(page, WeatherSources.QWEATHER, "和风天气", "免费官方源 · 需 Key", dark,
                 WeatherSources.QWEATHER.equals(initType), pager, new Runnable() {
                     @Override public void run() {
                         selType[0] = WeatherSources.QWEATHER;
-                        refreshSourceUi(rows, selType[0], keyInput);
+                        refreshSourceUi(rows, selType[0], keyInput, hostInput);
                     }
                 });
         rows[2] = stOption(page, WeatherSources.SENIVERSE, "心知天气", "需 API Key", dark,
                 WeatherSources.SENIVERSE.equals(initType), pager, new Runnable() {
                     @Override public void run() {
                         selType[0] = WeatherSources.SENIVERSE;
-                        refreshSourceUi(rows, selType[0], keyInput);
+                        refreshSourceUi(rows, selType[0], keyInput, hostInput);
                     }
                 });
         rows[3] = stOption(page, WeatherSources.CAIYUN, "彩云天气", "需 Token", dark,
                 WeatherSources.CAIYUN.equals(initType), pager, new Runnable() {
                     @Override public void run() {
                         selType[0] = WeatherSources.CAIYUN;
-                        refreshSourceUi(rows, selType[0], keyInput);
+                        refreshSourceUi(rows, selType[0], keyInput, hostInput);
                     }
                 });
         rows[4] = stOption(page, WeatherSources.AMAP, "高德天气", "需 Key", dark,
                 WeatherSources.AMAP.equals(initType), pager, new Runnable() {
                     @Override public void run() {
                         selType[0] = WeatherSources.AMAP;
-                        refreshSourceUi(rows, selType[0], keyInput);
+                        refreshSourceUi(rows, selType[0], keyInput, hostInput);
                     }
                 });
 
         stTextInput(page, keyInput, keyHint(initType), dark);
         keyInput.setText(WeatherSources.key(this, initType));
+        // v9.87-fix1：和风个人专属 API Host（自建中转/代理域名），仅和风源显示
+        stTextInput(page, hostInput, "和风 API Host（选填，默认官方 devapi.qweather.com）", dark);
+        hostInput.setText(WeatherSources.qHost(this));
+        hostInput.setVisibility(WeatherSources.QWEATHER.equals(initType)
+                ? View.VISIBLE : View.GONE);
 
         status.setTextSize(12);
         status.setTextColor(dark ? 0x88FFFFFF : 0xFF5C6B7A);
@@ -4371,13 +4427,14 @@ public class MainActivity extends Activity {
             @Override public void onClick(View v) {
                 final String t = selType[0];
                 final String k = keyInput.getText().toString().trim();
+                final String host = hostInput.getText().toString().trim();
                 status.setText("正在测试…（北京坐标）");
                 status.setTextColor(dark ? 0x88FFFFFF : 0xFF5C6B7A);
                 testBtn.setEnabled(false);
                 new Thread(new Runnable() {
                     @Override public void run() {
                         final WeatherSources.TestResult r =
-                                WeatherSources.test(MainActivity.this, t, k);
+                                WeatherSources.test(MainActivity.this, t, k, host);
                         runOnUiThread(new Runnable() {
                             @Override public void run() {
                                 testBtn.setEnabled(true);
@@ -4404,6 +4461,10 @@ public class MainActivity extends Activity {
                     return;
                 }
                 WeatherSources.save(MainActivity.this, t, k);
+                if (WeatherSources.QWEATHER.equals(t)) {
+                    WeatherSources.saveHost(MainActivity.this,
+                            hostInput.getText().toString().trim());
+                }
                 Toast.makeText(MainActivity.this, "已切换天气源：" + WeatherSources.label(MainActivity.this),
                         Toast.LENGTH_SHORT).show();
                 status.setText("当前：" + WeatherSources.label(MainActivity.this));
@@ -4422,7 +4483,7 @@ public class MainActivity extends Activity {
                                 WeatherSources.reset(MainActivity.this);
                                 selType[0] = WeatherSources.OPEN_METEO;
                                 keyInput.setText("");
-                                refreshSourceUi(rows, selType[0], keyInput);
+                                refreshSourceUi(rows, selType[0], keyInput, hostInput);
                                 status.setText("已恢复默认源：Open-Meteo");
                                 Toast.makeText(MainActivity.this, "已恢复默认天气源",
                                         Toast.LENGTH_SHORT).show();
@@ -4432,11 +4493,12 @@ public class MainActivity extends Activity {
             }
         });
 
-        refreshSourceUi(rows, initType, keyInput);
+        refreshSourceUi(rows, initType, keyInput, hostInput);
         return page;
     }
 
-    private void refreshSourceUi(OptionRow[] rows, String type, EditText keyInput) {
+    private void refreshSourceUi(OptionRow[] rows, String type, EditText keyInput,
+                                 EditText hostInput) {
         for (OptionRow r : rows) {
             boolean sel = type.equals(r.row.getTag());
             r.row.setSelected(sel);
@@ -4449,6 +4511,10 @@ public class MainActivity extends Activity {
             keyInput.setHint(keyHint(type));
             keyInput.setText(WeatherSources.key(MainActivity.this, type));
         }
+        // v9.87-fix1：和风专属 Host 输入框，仅和风源显示
+        boolean qw = WeatherSources.QWEATHER.equals(type);
+        hostInput.setVisibility(qw ? View.VISIBLE : View.GONE);
+        if (qw) hostInput.setText(WeatherSources.qHost(MainActivity.this));
     }
 
     /** 各源 Key 输入框的专属提示文案 */

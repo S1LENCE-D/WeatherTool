@@ -106,5 +106,22 @@
             android:textColor="#B3FFFFFF"
             android:textSize="10sp"
             android:maxLines="1" />
+
+        <ImageView
+            android:id="@+id/wIcWind"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="7dp"
+            android:contentDescription="" />
+
+        <TextView
+            android:id="@+id/wWind"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="2dp"
+            android:text=""
+            android:textColor="#B3FFFFFF"
+            android:textSize="10sp"
+            android:maxLines="1" />
     </LinearLayout>
 </LinearLayout>

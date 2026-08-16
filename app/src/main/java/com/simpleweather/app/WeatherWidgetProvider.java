@@ -176,9 +176,20 @@ public class WeatherWidgetProvider extends AppWidgetProvider {
                     JSONArray wcodes = daily.optJSONArray("weather_code");
                     JSONArray tmax = daily.optJSONArray("temperature_2m_max");
                     JSONArray tmin = daily.optJSONArray("temperature_2m_min");
+                    JSONArray tpop = daily.optJSONArray("precipitation_probability_max");
                     int n = Math.min(5, times == null ? 0 : times.length());
+                    // v9.87-fix1：日出日落行（今日 sunrise/sunset，双栏挤压问题同源修复）
+                    try {
+                        views.setTextViewText(R.id.wSunMoon,
+                                "日出 " + WeatherApi.hhmm(
+                                        daily.getJSONArray("sunrise").getString(0))
+                                + " · 日落 " + WeatherApi.hhmm(
+                                        daily.getJSONArray("sunset").getString(0)));
+                        views.setTextColor(R.id.wSunMoon, cSecondary);
+                    } catch (Exception ignored) { }
                     for (int i = 0; i < 5; i++) {
-                        int row = rowId(i), dayId = dayId(i), iconId = iconId(i), hiId = hiId(i);
+                        int row = rowId(i), dayId = dayId(i), iconId = iconId(i),
+                                hiId = hiId(i), loId = loId(i), popId = popId(i);
                         if (i < n) {
                             views.setViewVisibility(row, View.VISIBLE);
                             views.setTextViewText(dayId, dayLabel(i, times.optString(i, "")));
@@ -188,12 +199,25 @@ public class WeatherWidgetProvider extends AppWidgetProvider {
                                     : (int) Math.round(tmax.optDouble(i, 0));
                             int lo = tmin == null ? 0
                                     : (int) Math.round(tmin.optDouble(i, 0));
-                            views.setTextViewText(hiId, "↑" + hi + "°  ↓" + lo + "°");
+                            int pop = tpop == null ? -1
+                                    : (int) Math.round(tpop.optDouble(i, -1));
+                            // v9.87-fix1：高温/低温分列，行内补降水概率，空间充分利用
+                            views.setTextViewText(hiId, hi + "°");
+                            views.setTextViewText(loId, lo + "°");
                             views.setTextColor(dayId, cSecondary);
                             views.setTextColor(hiId, cPrimary);
+                            views.setTextColor(loId, cSecondary);
+                            if (pop >= 0) {
+                                views.setTextViewText(popId, "💧" + pop + "%");
+                                views.setTextColor(popId, cSecondary);
+                                views.setViewVisibility(popId, View.VISIBLE);
+                            } else {
+                                views.setViewVisibility(popId, View.INVISIBLE);
+                            }
                             if (i == 0) {
                                 views.setTextViewText(R.id.wTodayRange,
-                                        "↑" + hi + "° ↓" + lo + "°");
+                                        (pop >= 0 ? "💧" + pop + "%  " : "")
+                                                + "↑" + hi + "° ↓" + lo + "°");
                             }
                         } else {
                             views.setViewVisibility(row, View.GONE);
@@ -258,6 +282,9 @@ public class WeatherWidgetProvider extends AppWidgetProvider {
             views.setTextColor(R.id.wFeels, c);
             setPair(views, R.id.wIcHum, R.id.wHum, R.drawable.w_ic_hum,
                     hum < 0 ? null : hum + "%", c);
+            // v9.87-fix1：2x2 详情行补风（体感/湿度/风 三项）
+            setPair(views, R.id.wIcWind, R.id.wWind, R.drawable.w_ic_wind,
+                    wind < 0 ? null : Math.round(wind) + "km/h", c);
         }
     }
 
@@ -322,5 +349,11 @@ public class WeatherWidgetProvider extends AppWidgetProvider {
 
     private static int hiId(int i) {
         return new int[]{R.id.wHi0, R.id.wHi1, R.id.wHi2, R.id.wHi3, R.id.wHi4}[i];
+    }
+    private static int loId(int i) {
+        return new int[]{R.id.wLo0, R.id.wLo1, R.id.wLo2, R.id.wLo3, R.id.wLo4}[i];
+    }
+    private static int popId(int i) {
+        return new int[]{R.id.wPop0, R.id.wPop1, R.id.wPop2, R.id.wPop3, R.id.wPop4}[i];
     }
 }

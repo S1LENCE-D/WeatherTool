@@ -283,7 +283,9 @@
                             android:gravity="center"
                             android:text="--:-- · --:--"
                             android:textColor="#5F5F5F"
-                            android:textSize="14sp"
+                            android:textSize="12sp"
+                            android:maxLines="1"
+                            android:ellipsize="end"
                             android:fontFamily="sans-serif-medium" />
                     </LinearLayout>
 
@@ -308,7 +310,9 @@
                             android:gravity="center"
                             android:text="--"
                             android:textColor="#5F5F5F"
-                            android:textSize="14sp"
+                            android:textSize="12sp"
+                            android:maxLines="1"
+                            android:ellipsize="end"
                             android:fontFamily="sans-serif-medium" />
                     </LinearLayout>
                 </LinearLayout>
