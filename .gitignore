@@ -12,3 +12,6 @@ captures/
 *.apk
 *.class
 gen/
+
+# 内部文档，不入库
+APP架构梳理.md
