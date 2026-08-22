@@ -4392,7 +4392,7 @@ public class MainActivity extends Activity {
         final EditText hostInput = new EditText(this);
         final TextView status = new TextView(this);
 
-        rows[0] = stOption(page, WeatherSources.OPEN_METEO, "Open-Meteo", "备用源 · 无需密钥", dark,
+        rows[0] = stOption(page, WeatherSources.OPEN_METEO, "Open-Meteo", "默认源 · 无需密钥", dark,
                 WeatherSources.OPEN_METEO.equals(initType), pager, new Runnable() {
                     @Override public void run() {
                         selType[0] = WeatherSources.OPEN_METEO;

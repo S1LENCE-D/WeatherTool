@@ -10,8 +10,8 @@ android {
         applicationId 'com.simpleweather.app'
         minSdk 24
         targetSdk 33
-        versionCode 110
-        versionName '9.88.10'
+        versionCode 111
+        versionName '9.88.11'
     }
 
     signingConfigs {
