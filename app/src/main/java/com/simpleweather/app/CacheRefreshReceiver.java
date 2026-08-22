@@ -5,9 +5,10 @@ import android.content.Context;
 import android.content.Intent;
 
 /**
- * v9.87：后台缓存刷新闹钟接收器。
- * goAsync + 子线程直接拉取最新天气写缓存（不启动服务，规避后台启动限制），
- * 10 秒广播窗口内完成：fetchWeather 单次网络请求通常 1~3 秒。
+ * v9.88.3：后台心跳接收器（每 15 分钟）。
+ * ① 拉取最新天气写缓存；② 定时播报错过补发；③ 预警每次心跳都查（开关开启时）。
+ * goAsync + 子线程：网络请求 1~3 秒，补播/补查仅启动短时服务（毫秒级），
+ * 10 秒广播窗口内完成；全部静默，无常驻痕迹。
  */
 public class CacheRefreshReceiver extends BroadcastReceiver {
     @Override
@@ -24,11 +25,16 @@ public class CacheRefreshReceiver extends BroadcastReceiver {
                     // 用上次成功坐标拉最新天气；内部 WeatherCache.save 已写缓存
                     WeatherCenter.get().fetchWeather(context, d.lat, d.lng, d.city);
                 } catch (Exception ignored) {
-                    // 失败静默跳过：下一轮闹钟 / 回前台补刷兜底
+                    // 失败静默跳过：下一轮心跳 / 回前台补刷兜底
                 } finally {
                     pr.finish();
                 }
             }
         }).start();
+        // v9.88.3：补播报（已播报则自动跳过）；预警每次心跳都查一次（开关开着时）
+        WeatherReporter.maybeCatchUpReport(context);
+        if (AlertWatcher.enabled(context)) {
+            AlertWatcher.startCheck(context);
+        }
     }
 }

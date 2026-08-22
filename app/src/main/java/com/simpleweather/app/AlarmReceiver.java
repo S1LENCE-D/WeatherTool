@@ -18,6 +18,8 @@ public class AlarmReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         // 触发后重排下一次（一次性闹钟 → 每日循环）
         WeatherReporter.ensureScheduled(context);
+        // v9.88.3：记录今日已播报（心跳补播报据此跳过）
+        WeatherReporter.markReported(context);
         Intent svc = new Intent(context, SpeakService.class);
         if (Build.VERSION.SDK_INT >= 26) {
             context.startForegroundService(svc);

@@ -12,7 +12,7 @@ import java.util.Set;
 
 /**
  * 预警检查服务（v9.78 重写）：
- * - 由 AlertAlarmReceiver 周期闹钟触发，每次只做一次检查，完成后自停；
+ * - v9.88.3：由 15 分钟后台心跳（CacheRefreshReceiver）触发，每次只做一次检查，完成后自停；
  * - 拉取本地气象预警，黄色及以上（alarmLevel>=3）且未通知过则推送（走 Notifier）；
  * - 不再 startForeground / 不再 Handler 轮询 / 不再 WakeLock：
  *   通知栏无「预警监控中」常驻通知，后台无长期驻留。

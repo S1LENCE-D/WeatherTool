@@ -7,7 +7,10 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Build;
 
+import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.Date;
+import java.util.Locale;
 
 /**
  * 定时天气通知：设置存储（SharedPreferences）+ AlarmManager 每日调度。
@@ -24,6 +27,8 @@ public final class WeatherReporter {
     public static final String KEY_MANUAL_NAME = "manual_name";
     public static final String KEY_MANUAL_LAT = "manual_lat";
     public static final String KEY_MANUAL_LNG = "manual_lng";
+    // v9.88.3：最近一次定时播报日期（yyyyMMdd），用于错过补播报去重
+    public static final String KEY_LAST_REPORT_DATE = "last_report_date";
 
     private WeatherReporter() { }
 
@@ -174,5 +179,40 @@ public final class WeatherReporter {
         PendingIntent pi = PendingIntent.getBroadcast(ctx, 0, it,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         am.cancel(pi);
+    }
+
+    /** v9.88.3：记录「今日定时播报已执行」标记（定时触发与补播报共用，防重复） */
+    public static void markReported(Context ctx) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putString(KEY_LAST_REPORT_DATE, todayKey())
+                .apply();
+    }
+
+    private static String todayKey() {
+        return new SimpleDateFormat("yyyyMMdd", Locale.US).format(new Date());
+    }
+
+    /**
+     * v9.88.3：错过补播报——后台心跳（每 15 分钟）调用。
+     * 已过今日计划时刻 && 今天定时播报尚未执行 → 补一次播报并立即写标记，
+     * 之后的心跳检测到「已播报」自动跳过。
+     * 手动「立即播报」不写标记（不吞定时播报，宁多勿漏）。
+     */
+    public static void maybeCatchUpReport(Context ctx) {
+        SharedPreferences sp = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        if (!sp.getBoolean(KEY_ENABLED, false)) return;            // 开关关闭：不补
+        String today = todayKey();
+        if (today.equals(sp.getString(KEY_LAST_REPORT_DATE, ""))) return;  // 已播报：跳过
+        Calendar plan = Calendar.getInstance();
+        plan.set(Calendar.HOUR_OF_DAY, sp.getInt(KEY_HOUR, 8));
+        plan.set(Calendar.MINUTE, sp.getInt(KEY_MINUTE, 0));
+        plan.set(Calendar.SECOND, 0);
+        plan.set(Calendar.MILLISECOND, 0);
+        if (System.currentTimeMillis() < plan.getTimeInMillis()) return;   // 未到点：不补
+        // 到点未播：走与 AlarmReceiver 相同链路（前台服务启动凭证，播报后自停）
+        Intent svc = new Intent(ctx, SpeakService.class);
+        if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(svc);
+        else ctx.startService(svc);
+        sp.edit().putString(KEY_LAST_REPORT_DATE, today).apply();   // 先写标记防心跳重复补
     }
 }

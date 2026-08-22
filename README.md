@@ -2,7 +2,7 @@
 
 > 极简、纯净、零广告的安卓天气应用 · 酷安 @Eartecd
 >
-> 当前版本：**v9.88.3**（versionCode 114）
+> 当前版本：**v9.88.3**（versionCode 115）
 
 零第三方依赖，纯 Java + Android framework 编写（无 Compose / Kotlin），单 APK 约 **500KB**。
 
@@ -65,7 +65,7 @@ git tag v9.88 && git push origin v9.88
 
 ## 更新记录
 
-- **v9.88.3**：平板载入 MSN 云图提速——平板 UA 无 Mobile 标记会被按桌面版渲染（瓦片大、资源多、加载慢），注入移动版特征让服务端返回轻量页面
+- **v9.88.3**：后台静默心跳（重命名发布，含此前平板云图提速全部改动）——删除常驻保活服务（KeepAlive），改为每 15 分钟静默心跳：① 每次心跳拉取最新天气与预警；② 定时播报错过补发（当天不重复）；③ 预警开关开启时每次心跳都查；通知栏无常驻痕迹，后台无长期驻留
 - **v9.88.2**：日志文件按「天」一份、同天闪退/重启复用同一文件追加写入（此前每次启动新建，排查崩溃困难）；Download 保留最近 5 份
 - **v9.88.1**：修复无 GPS 硬件设备（如小米平板）获取定位时闪退——此类设备系统无 GPS_PROVIDER，`getLastKnownLocation` / `requestLocationUpdates` 会抛 IllegalArgumentException（非 SecurityException）；已扩大异常捕获 + 监听前 provider 存在性检查；日志标题版本号改为动态读取
 - **v9.88**：毛玻璃背景 + 多尺寸自适应（v9.88→9.88.11 共 12 轮迭代，最终版）

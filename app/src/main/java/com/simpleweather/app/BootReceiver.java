@@ -11,11 +11,8 @@ public class BootReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
             WeatherReporter.ensureScheduled(context);
-            // v9.70/v9.78：预警开关开着则恢复 30 分钟周期闹钟（无常驻服务）
-            AlertWatcher.ensureRunning(context);
-            // v9.87：恢复每小时后台缓存刷新（有成功缓存即开启）
+            // v9.88.3：恢复后台心跳（每 15 分钟：刷缓存 + 补播报 + 查预警，全部静默）
             CacheRefresher.ensureRunning(context);
-            KeepAliveManager.ensureRunning(context);
         }
     }
 }

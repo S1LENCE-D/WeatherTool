@@ -6,18 +6,19 @@ import android.content.Context;
 import android.content.Intent;
 
 /**
- * v9.87：后台缓存自动刷新。
+ * v9.88.3：后台心跳（每 15 分钟静默检查一次，检查后进程自然回收）。
  *
- * 解决「后台信息不自己刷新缓存」：原实现靠 MainActivity 的 Handler 定时器
- * （进程存活时每 1 小时刷一次），但进程被系统回收或设备进入 Doze 后
- * Handler 定时器完全不执行，缓存永远停留在最后一次前台刷新。
+ * 原 v9.87 为「后台缓存自动刷新」；v9.88.3 起作为统一的静默心跳：
+ * ① 拉取最新天气写缓存（原功能，进程存活时后台信息保持新鲜）；
+ * ② 定时播报错过补发（见 WeatherReporter.maybeCatchUpReport）；
+ * ③ 预警每次心跳都查一次（见 AlertWatcher.startCheck，开关开启时）。
  *
- * 改为 AlarmManager 每小时触发一次广播，接收器内 goAsync + 线程
- * 直接拉取最新天气并写缓存（WeatherCenter 统一链路）：
- *  - 不启动服务：规避 Android 8+ 后台启动限制 / Android 12+ 前台服务限制；
+ * 实现要点：
+ *  - 广播接收器内 goAsync + 线程直接拉取（不启动常驻服务，规避
+ *    Android 8+ 后台启动限制 / Android 12+ 前台服务限制）；
  *  - 无通知无权限：纯静默更新，用户无感；
  *  - 用上次成功坐标（不重新定位），保证广播 10 秒窗口内完成；
- *  - 拉取失败静默跳过，等下一轮 / 回前台补刷兜底。
+ *  - 检查完成即静默结束，无常驻进程、无通知栏痕迹。
  */
 public final class CacheRefresher {
 

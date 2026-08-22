@@ -454,13 +454,10 @@ public class MainActivity extends Activity {
             }
         }
 
-        // 恢复/确保定时通知调度 + v9.70：恢复预警监控服务
+        // 恢复/确保定时通知调度（v9.88.3：预警检查已并入后台心跳，无需单独恢复）
         WeatherReporter.ensureScheduled(this);
-        AlertWatcher.ensureRunning(this);
         // v9.87：恢复每小时后台缓存刷新（有成功缓存即开启）
         CacheRefresher.ensureRunning(this);
-        // v9.88：恢复后台常驻服务（开关开着则进程保活）
-        KeepAliveManager.ensureRunning(this);
         // v9.15：首次加载与每次回前台刷新统一由 onResume 触发，避免冷启动双请求
     }
 
@@ -2207,7 +2204,7 @@ public class MainActivity extends Activity {
                 }
                 Location loc0 = locator.locateBy(locChoice);
                 boolean ipLoc = loc0 != null && "ip".equals(loc0.getProvider());
-                // v9.88.4：定位失败不再放弃拉取——用最后一次成功定位（无则默认坐标）
+                // v9.88.3：定位失败不再放弃拉取——用最后一次成功定位（无则默认坐标）
                 // 兜底继续拉取，七天/24 小时等数据持续刷新（与定时播报同口径）
                 final boolean locFailed = loc0 == null;
                 final Location loc;
@@ -4269,18 +4266,6 @@ public class MainActivity extends Activity {
                 Toast.makeText(MainActivity.this,
                         on ? "已开启：每 30 分钟检查预警，黄色及以上自动提醒"
                            : "已关闭后台预警监控", Toast.LENGTH_SHORT).show();
-            }
-        });
-
-        final M3Switch keepSw = new M3Switch(this);
-        keepSw.setChecked(KeepAliveManager.enabled(this));
-        stSwitchRow(page, "后台常驻", "划掉后台任务后仍保持推送与自动刷新", dark, keepSw);
-        keepSw.setOnCheckedChangeListener(new M3Switch.OnCheckedChangeListener() {
-            @Override public void onCheckedChanged(M3Switch sw, boolean on) {
-                KeepAliveManager.setEnabled(MainActivity.this, on);
-                Toast.makeText(MainActivity.this,
-                        on ? "已开启后台常驻：划掉任务后仍保持推送与自动刷新"
-                           : "已关闭后台常驻", Toast.LENGTH_SHORT).show();
             }
         });
 

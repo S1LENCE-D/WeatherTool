@@ -11,7 +11,7 @@ import android.content.Intent;
  * 监听 ACTION_MY_PACKAGE_REPLACED（更新完成后系统发给本应用自身的广播），
  * 立即按开关状态恢复两类闹钟：
  *  ① 每日定时推送闹钟（WeatherReporter.ensureScheduled）
- *  ② 预警监控 30 分钟周期闹钟（AlertWatcher.ensureRunning）
+ *  ② 后台心跳（CacheRefresher.ensureRunning，内含预警检查）
  * 与开机恢复（BootReceiver）、启动恢复（MainActivity）互为兜底。
  */
 public class UpdateReceiver extends BroadcastReceiver {
@@ -19,9 +19,7 @@ public class UpdateReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         if (Intent.ACTION_MY_PACKAGE_REPLACED.equals(intent.getAction())) {
             WeatherReporter.ensureScheduled(context);
-            AlertWatcher.ensureRunning(context);
             CacheRefresher.ensureRunning(context);
-            KeepAliveManager.ensureRunning(context);
         }
     }
 }

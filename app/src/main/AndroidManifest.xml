@@ -50,11 +50,6 @@
             android:name=".AlarmReceiver"
             android:exported="false" />
 
-        <!-- v9.78：预警周期闹钟（30 分钟一次，触发短时检查服务） -->
-        <receiver
-            android:name=".AlertAlarmReceiver"
-            android:exported="false" />
-
         <!-- v9.87：后台缓存刷新闹钟（每小时静默拉取写缓存，goAsync 无服务） -->
         <receiver
             android:name=".CacheRefreshReceiver"
@@ -113,9 +108,7 @@
             android:name=".AlertWatchService"
             android:exported="false" />
 
-        <!-- v9.88：后台常驻服务（前台服务 + 低优先级通知，进程保活） -->
-        <service
-            android:name=".KeepAliveService"
-            android:exported="false" />
+        <!-- v9.88.4：后台常驻服务已移除——改为每 15 分钟闹钟心跳（CacheRefreshReceiver），
+             静默检查：刷缓存 + 错过补播报/补查预警，无常驻进程无通知 -->
     </application>
 </manifest>

@@ -30,7 +30,6 @@ public final class Notifier {
     public static final int ID_REPORT = 1001;   // 定时天气简报
     public static final int ID_ALERT = 2002;    // 预警提醒
     public static final int ID_FG = 3003;       // v9.87：前台服务占位通知（服务结束即移除）
-    public static final int ID_KEEP = 3004;     // v9.88：后台常驻前台服务通知（低优先级可折叠）
     public static final int ID_CUSTOM = 4005;  // v9.87test：自定义气象提醒
 
     private Notifier() { }
@@ -105,24 +104,6 @@ public final class Notifier {
         b.setContentIntent(mainIntent(c));
         b.setAutoCancel(!loading);
         if (!loading) b.setCategory(Notification.CATEGORY_ALARM);
-        return b.build();
-    }
-
-    /** v9.88：后台常驻前台服务通知（低优先级，无声音无震动，可折叠） */
-    public static Notification buildKeepAlive(Context c) {
-        ensureChannels(c);
-        Notification.Builder b = Build.VERSION.SDK_INT >= 26
-                ? new Notification.Builder(c, CH_REFRESH)
-                : new Notification.Builder(c);
-        b.setSmallIcon(R.drawable.ic_cloud);
-        b.setContentTitle("简洁天气 · 后台服务运行中");
-        b.setContentText("保持定时推送与天气数据自动更新");
-        b.setOngoing(true);
-        b.setContentIntent(mainIntent(c));
-        if (Build.VERSION.SDK_INT >= 26) {
-            // 折叠为低优先级类别，减少通知栏打扰
-            b.setPriority(Notification.PRIORITY_MIN);
-        }
         return b.build();
     }
 
