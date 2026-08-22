@@ -182,9 +182,8 @@
 
         <TextView
             android:id="@+id/wDay0"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:text=""
             android:textColor="#B3FFFFFF"
             android:textSize="12sp"
@@ -207,6 +206,11 @@
             android:textSize="11sp"
             android:gravity="center"
             android:maxLines="1" />
+        <!-- v9.88.1：弹性占位，日期/降水靠左、温度靠右，消除日期后空白 -->
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
 
         <TextView
             android:id="@+id/wHi0"
@@ -238,9 +242,8 @@
 
         <TextView
             android:id="@+id/wDay1"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:text=""
             android:textColor="#B3FFFFFF"
             android:textSize="12sp"
@@ -263,6 +266,11 @@
             android:textSize="11sp"
             android:gravity="center"
             android:maxLines="1" />
+        <!-- v9.88.1：弹性占位，日期/降水靠左、温度靠右，消除日期后空白 -->
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
 
         <TextView
             android:id="@+id/wHi1"
@@ -294,9 +302,8 @@
 
         <TextView
             android:id="@+id/wDay2"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:text=""
             android:textColor="#B3FFFFFF"
             android:textSize="12sp"
@@ -319,6 +326,11 @@
             android:textSize="11sp"
             android:gravity="center"
             android:maxLines="1" />
+        <!-- v9.88.1：弹性占位，日期/降水靠左、温度靠右，消除日期后空白 -->
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
 
         <TextView
             android:id="@+id/wHi2"
@@ -350,9 +362,8 @@
 
         <TextView
             android:id="@+id/wDay3"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:text=""
             android:textColor="#B3FFFFFF"
             android:textSize="12sp"
@@ -375,6 +386,11 @@
             android:textSize="11sp"
             android:gravity="center"
             android:maxLines="1" />
+        <!-- v9.88.1：弹性占位，日期/降水靠左、温度靠右，消除日期后空白 -->
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
 
         <TextView
             android:id="@+id/wHi3"
@@ -406,9 +422,8 @@
 
         <TextView
             android:id="@+id/wDay4"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:text=""
             android:textColor="#B3FFFFFF"
             android:textSize="12sp"
@@ -431,6 +446,11 @@
             android:textSize="11sp"
             android:gravity="center"
             android:maxLines="1" />
+        <!-- v9.88.1：弹性占位，日期/降水靠左、温度靠右，消除日期后空白 -->
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
 
         <TextView
             android:id="@+id/wHi4"

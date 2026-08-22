@@ -395,7 +395,7 @@ public class WeatherWidgetProvider extends AppWidgetProvider {
             boolean is2x2 = layout == R.layout.widget_2x2;
             float base = is2x2 ? 110f : 250f;               // 布局基准尺寸（dp）
             float s = Math.min(w / base, h / base);         // 缩放系数
-            s = Math.max(0.9f, Math.min(1.7f, s));          // 0.9 ~ 1.7
+            s = Math.max(0.9f, Math.min(1.8f, s));          // 0.9 ~ 1.8
 
             // 根内边距随尺寸缩放（玻璃边缘留白与内容平衡）
             int pad = Math.round((is2x2 ? 12f : 14f) * s);
@@ -418,7 +418,11 @@ public class WeatherWidgetProvider extends AppWidgetProvider {
                     views.setTextViewTextSize(popId(i), TypedValue.COMPLEX_UNIT_SP, 11f * s);
                     views.setTextViewTextSize(hiId(i), TypedValue.COMPLEX_UNIT_SP, 12f * s);
                     views.setTextViewTextSize(loId(i), TypedValue.COMPLEX_UNIT_SP, 12f * s);
-                    int rp = Math.round(1.5f * s);
+                    // 行距按高度分档：越高越宽松，4x4 时内容铺满不紧凑
+                    int rp;
+                    if (h >= 450) rp = Math.round(6f * s);
+                    else if (h >= 350) rp = Math.round(4f * s);
+                    else rp = Math.round(2f * s);
                     views.setViewPadding(rowId(i), 0, rp, 0, rp);
                 }
                 // 高度档位：不足收起附加行，充足全部展开
