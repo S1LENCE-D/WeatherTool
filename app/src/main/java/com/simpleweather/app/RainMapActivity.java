@@ -210,8 +210,13 @@ public class RainMapActivity extends Activity {
         s.setLoadsImagesAutomatically(true);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);   // v9.73 修订：保留缓存——MSN 云图依赖 cookie 会话，WebView 自带 LRU 淘汰
         try { s.setRenderPriority(WebSettings.RenderPriority.HIGH); } catch (Exception ignored) { }
-        s.setUserAgentString(s.getUserAgentString()
-                + " WeatherTool/9.62 (com.simpleweather.app)");
+        // v9.88.2：平板/桌面 UA 无 Mobile 标记——MSN 会按桌面版渲染（瓦片大、资源多、载入慢）；
+        // 注入移动版特征，让服务端返回轻量页面；手机 UA 本身带 Mobile，不动
+        String ua = s.getUserAgentString();
+        if (!ua.contains("Mobile")) {
+            ua = ua.replaceFirst("\\) AppleWebKit", "; Mobile) AppleWebKit");
+        }
+        s.setUserAgentString(ua + " WeatherTool/9.62 (com.simpleweather.app)");
 
         web.setWebViewClient(new WebViewClient() {
             /** 主导航：非 MSN 天气页一律拦截（含外链跳转） */
