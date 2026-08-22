@@ -1,6 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 小组件深色圆角背景 -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <solid android:color="#E61A2333" />
-    <corners android:radius="18dp" />
-</shape>
+<!-- v9.88 毛玻璃深色背景：半透明渐变底 + 高光描边（壁纸透出呈磨砂质感） -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape>
+            <gradient
+                android:angle="135"
+                android:startColor="#B81A2438"
+                android:endColor="#7A162030"
+                android:type="linear" />
+            <corners android:radius="18dp" />
+        </shape>
+    </item>
+    <!-- 玻璃边缘高光 -->
+    <item>
+        <shape>
+            <stroke
+                android:width="1dp"
+                android:color="#3DFFFFFF" />
+            <corners android:radius="18dp" />
+        </shape>
+    </item>
+</layer-list>

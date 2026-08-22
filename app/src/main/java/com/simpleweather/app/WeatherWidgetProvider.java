@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.location.Location;
 import android.os.Bundle;
+import android.util.TypedValue;
 import android.view.View;
 import android.widget.RemoteViews;
 
@@ -241,6 +242,9 @@ public class WeatherWidgetProvider extends AppWidgetProvider {
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
             views.setOnClickPendingIntent(layout == R.layout.widget_2x2
                     ? R.id.widgetRoot2 : R.id.widgetRoot4, pi);
+            // v9.88：按小组件实际尺寸自适应（缩放字体/内边距/行距、控制附加行显隐）
+            applySize(context, mgr, id, views, layout);
+
             mgr.updateAppWidget(id, views);
         } catch (Exception ignored) { }
     }
@@ -355,5 +359,76 @@ public class WeatherWidgetProvider extends AppWidgetProvider {
     }
     private static int popId(int i) {
         return new int[]{R.id.wPop0, R.id.wPop1, R.id.wPop2, R.id.wPop3, R.id.wPop4}[i];
+    }
+
+    // ---------- v9.88 尺寸自适应 ----------
+
+    /** 2x2 文字控件及其基准字号（sp），随小组件尺寸等比例缩放 */
+    private static final int[] TEXTS_2X2 = {
+        R.id.wCity, R.id.wTime, R.id.wTemp, R.id.wIcon,
+        R.id.wDesc, R.id.wFeels, R.id.wHum, R.id.wWind
+    };
+    private static final float[] SIZES_2X2 = {12f, 10f, 34f, 24f, 11f, 10f, 10f, 10f};
+
+    /** 2x4 头部文字控件及其基准字号（sp） */
+    private static final int[] TEXTS_2X4 = {
+        R.id.wCity, R.id.wTime, R.id.wTodayIcon, R.id.wTodayDesc, R.id.wTodayRange,
+        R.id.wHum, R.id.wWind, R.id.wCloud, R.id.wUv, R.id.wSunMoon
+    };
+    private static final float[] SIZES_2X4 = {14f, 10f, 17f, 13f, 11f, 11f, 11f, 11f, 11f, 10f};
+
+    /**
+     * v9.88：按小组件实际尺寸整体自适应，充分利用整个界面。
+     * 读取 launcher 上报的最小宽高（dp），与布局基准尺寸求缩放系数：
+     * 根内边距、全部文字字号、预报行行距随系数缩放；
+     * 尺寸足够大时显示日出日落等附加行，不足时收起避免挤压。
+     * 数据缺失导致的隐藏（fillExtra 已 GONE）不受影响。
+     */
+    private static void applySize(Context context, AppWidgetManager mgr, int id,
+                                  RemoteViews views, int layout) {
+        try {
+            Bundle opts = mgr.getAppWidgetOptions(id);
+            int w = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0);
+            int h = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0);
+            if (w <= 0 || h <= 0) return;   // launcher 未上报尺寸：保持布局默认
+
+            boolean is2x2 = layout == R.layout.widget_2x2;
+            float base = is2x2 ? 110f : 250f;               // 布局基准尺寸（dp）
+            float s = Math.min(w / base, h / base);         // 缩放系数
+            s = Math.max(0.9f, Math.min(1.7f, s));          // 0.9 ~ 1.7
+
+            // 根内边距随尺寸缩放（玻璃边缘留白与内容平衡）
+            int pad = Math.round((is2x2 ? 12f : 14f) * s);
+            views.setViewPadding(is2x2 ? R.id.widgetRoot2 : R.id.widgetRoot4,
+                    pad, pad, pad, pad);
+
+            // 头部文字按比例缩放
+            int[] ids = is2x2 ? TEXTS_2X2 : TEXTS_2X4;
+            float[] sizes = is2x2 ? SIZES_2X2 : SIZES_2X4;
+            for (int i = 0; i < ids.length; i++) {
+                views.setTextViewTextSize(ids[i], TypedValue.COMPLEX_UNIT_SP,
+                        sizes[i] * s);
+            }
+
+            if (!is2x2) {
+                // 2x4 预报行：字体 + 行距随尺寸拉伸（垂直 padding 撑高行身）
+                for (int i = 0; i < 5; i++) {
+                    views.setTextViewTextSize(dayId(i), TypedValue.COMPLEX_UNIT_SP, 12f * s);
+                    views.setTextViewTextSize(iconId(i), TypedValue.COMPLEX_UNIT_SP, 14f * s);
+                    views.setTextViewTextSize(popId(i), TypedValue.COMPLEX_UNIT_SP, 11f * s);
+                    views.setTextViewTextSize(hiId(i), TypedValue.COMPLEX_UNIT_SP, 12f * s);
+                    views.setTextViewTextSize(loId(i), TypedValue.COMPLEX_UNIT_SP, 12f * s);
+                    int rp = Math.round(1.5f * s);
+                    views.setViewPadding(rowId(i), 0, rp, 0, rp);
+                }
+                // 高度档位：不足收起附加行，充足全部展开
+                if (h < 250) {
+                    views.setViewVisibility(R.id.wExtraRow, View.GONE);
+                    views.setViewVisibility(R.id.wSunMoon, View.GONE);
+                } else if (h < 300) {
+                    views.setViewVisibility(R.id.wSunMoon, View.GONE);
+                }
+            }
+        } catch (Exception ignored) { }
     }
 }
