@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v9.88.6 低饱和预警条背景：柔和灰玫瑰渐变（贴整体冷调主题） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <corners android:radius="14dp" />
+    <gradient
+        android:startColor="#C98F94"
+        android:endColor="#BC7F85"
+        android:angle="0" />
+</shape>

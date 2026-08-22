@@ -688,6 +688,35 @@ public class MainActivity extends Activity {
      *  不可用状态点击预警条可直接重试）。
      *  v9.44：同城 1.5s 内双请求防抖（pickCity 立即拉 + startLoad 兜底）；
      *  恢复自动定位后 force 强制重拉并按新定位重置状态。 */
+    /**
+     * v9.88.6：按当前预警结果重绘主页预警条（低饱和开关切换后调用，免网络请求）。
+     * 无预警 / 灰态 / OK 态背景与低饱和无关，仅在有预警时重绘。
+     */
+    private void rerenderAlertBar() {
+        if (alertResult == null || alertResult.local.isEmpty()) return;
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                boolean muted = Theme.alertMuted(MainActivity.this);
+                alertBar.setBackgroundResource(muted
+                        ? R.drawable.bg_alert_muted : R.drawable.bg_alert);
+                String first = alertResult.local.get(0)[0] == null
+                        ? "" : alertResult.local.get(0)[0];
+                android.text.SpannableStringBuilder sb =
+                        new android.text.SpannableStringBuilder();
+                sb.append("\u25CF ");
+                sb.setSpan(new android.text.style.ForegroundColorSpan(
+                                alertLevelColor(first)),
+                        0, 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                sb.append(String.valueOf(alertResult.local.size()))
+                        .append(" 条气象预警 · ").append(first);
+                alertText.setSingleLine(true);
+                alertText.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                alertText.setText(sb);
+            }
+        });
+    }
+
     private void loadAlerts(final String city) {
         final boolean manual = WeatherReporter.hasManualCity(this);
         String ck = city == null ? "" : city.trim();
@@ -739,7 +768,9 @@ public class MainActivity extends Activity {
                         if (!r.local.isEmpty()) {
                             alertMode = 1;
                             alertBar.setVisibility(View.VISIBLE);
-                            alertBar.setBackgroundResource(R.drawable.bg_alert);
+                            // v9.88.6：低饱和开关同时切换预警条背景
+                            alertBar.setBackgroundResource(Theme.alertMuted(MainActivity.this)
+                                    ? R.drawable.bg_alert_muted : R.drawable.bg_alert);
                             // v9.41：等级色圆点 + 条数 + 首条标题（单行省略，保住「详情 ›」）
                             String first = r.local.get(0)[0] == null ? "" : r.local.get(0)[0];
                             android.text.SpannableStringBuilder sb =
@@ -1107,19 +1138,21 @@ public class MainActivity extends Activity {
 
             LinearLayout cardBox = new LinearLayout(this);
             cardBox.setOrientation(LinearLayout.HORIZONTAL);
+            // v9.88.6：等级色条改为背景层（左 5dp 竖条 FILL_VERTICAL），
+            // 不再依赖 MATCH_PARENT 在 wrap 容器中的测量，绝对填满卡片高度
             GradientDrawable cd = new GradientDrawable();
             cd.setColor(card);
             cd.setCornerRadius(dp(14));
-            cardBox.setBackground(cd);
-            cardBox.setPadding(dp(4), 0, dp(14), 0);
-
-            View stripe = new View(this);
             GradientDrawable st = new GradientDrawable();
             st.setColor(lc);
             st.setCornerRadii(new float[]{dp(14), dp(14), 0, 0, 0, 0, dp(14), dp(14)});
-            stripe.setBackground(st);
-            cardBox.addView(stripe, new LinearLayout.LayoutParams(
-                    dp(5), LinearLayout.LayoutParams.MATCH_PARENT));
+            android.graphics.drawable.LayerDrawable bgd =
+                    new android.graphics.drawable.LayerDrawable(
+                            new android.graphics.drawable.Drawable[]{cd, st});
+            bgd.setLayerGravity(1, Gravity.LEFT | Gravity.FILL_VERTICAL);
+            bgd.setLayerWidth(1, dp(5));
+            cardBox.setBackground(bgd);
+            cardBox.setPadding(dp(9), 0, dp(14), 0);
 
             LinearLayout txtBox = new LinearLayout(this);
             txtBox.setOrientation(LinearLayout.VERTICAL);
@@ -1153,10 +1186,10 @@ public class MainActivity extends Activity {
     /** 预警等级色：红/橙/黄/蓝，默认灰；v9.88.5 支持低饱和柔和色（外观设置开启） */
     private int alertLevelColor(String title) {
         boolean muted = Theme.alertMuted(this);
-        if (title.contains("红色")) return muted ? 0xFFC08D8A : 0xFFE53935;
-        if (title.contains("橙色")) return muted ? 0xFFC8A276 : 0xFFFB8C00;
-        if (title.contains("黄色")) return muted ? 0xFFC9B27E : 0xFFF9A825;
-        if (title.contains("蓝色")) return muted ? 0xFF8FA8C4 : 0xFF1E88E5;
+        if (title.contains("红色")) return muted ? 0xFFBE8E94 : 0xFFE53935;
+        if (title.contains("橙色")) return muted ? 0xFFC2A284 : 0xFFFB8C00;
+        if (title.contains("黄色")) return muted ? 0xFFC0B185 : 0xFFF9A825;
+        if (title.contains("蓝色")) return muted ? 0xFF85A6C9 : 0xFF1E88E5;
         return Theme.isDark(this) ? 0xFF9AA0A8 : 0xFF8A9099;
     }
 
@@ -4103,6 +4136,7 @@ public class MainActivity extends Activity {
         muteSw.setOnCheckedChangeListener(new M3Switch.OnCheckedChangeListener() {
             @Override public void onCheckedChanged(M3Switch b, boolean on) {
                 Theme.setAlertMuted(MainActivity.this, on);
+                rerenderAlertBar();   // v9.88.6：立即重绘主页预警条，无需重新拉取
             }
         });
         stSwitchRow(page, "预警信息低饱和显示", "红/橙/黄/蓝等级色替换为低饱和柔和色", dark, muteSw);
