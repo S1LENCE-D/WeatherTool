@@ -43,7 +43,7 @@ python3 build_release.py
 流程：注入版本信息 → aapt 打包资源 → javac 编译 → d8 转 dex → apksigner 签名。
 产物：`build/WeatherTool_v9.88.apk`。
 
-另有分支构建：`python3 build_p115.py`（115% 界面）、`python3 build_large.py`（大字版）。
+历史分支构建脚本已归档至 `scripts/legacy/`（115% 界面 / 大字版），仅作参考。
 
 ### 方式 B：Android Studio（Mac / Windows）
 
@@ -74,6 +74,15 @@ git tag v9.88 && git push origin v9.88
 - **v9.87**：多天气源切换、定时推送可靠性优化、定位优化、修复后台预警推送失效、ARM64 环境编译
 
 ---
+
+## 仓库结构
+
+```
+app/                    # 主工程（纯 Java，包名 com.simpleweather.app）
+build_release.py        # 正式发布构建流水线（Linux，与 CI 一致）
+scripts/legacy/         # 历史构建/发布脚本归档（仅参考）
+.github/workflows/      # GitHub Actions 自动构建发布（推送 v* 标签触发）
+```
 
 ## 工程说明
 
