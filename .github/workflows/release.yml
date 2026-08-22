@@ -62,6 +62,17 @@ jobs:
             echo "sign_label=未配置 Secrets，debug 签名（仅测试用）" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: 兼容 ARM64 工具链路径（CI 为 x86_64）
+        run: |
+          # 工程 gradle.properties 为 ARM64 主机固化 aapt2/zipalign 覆盖路径；
+          # CI 无该路径，预建软链指向官方工具，保证两种主机都能构建
+          sudo mkdir -p /opt/android-sdk/build-tools/arm64-37.0.0
+          AAPT2=$(find "$ANDROID_HOME/build-tools" -type f -name aapt2 | head -1)
+          ZIP=$(find "$ANDROID_HOME/build-tools" -type f -name zipalign | head -1)
+          sudo ln -sf "$AAPT2" /opt/android-sdk/build-tools/arm64-37.0.0/aapt2
+          sudo ln -sf "$ZIP" /opt/android-sdk/build-tools/arm64-37.0.0/zipalign
+          ls -l /opt/android-sdk/build-tools/arm64-37.0.0/
+
       - name: 构建 Release APK
         run: |
           chmod +x gradlew 2>/dev/null || true
