@@ -2574,7 +2574,9 @@ public class MainActivity extends Activity {
             buildHourly(json, cols);
             buildDaily(daily, cols);
 
-            sourceText.setText("数据来源：Open-Meteo  ·  " + json.optString("timezone", ""));
+            // v9.88.10：数据来源随设置中的天气源动态显示（此前硬编码 Open-Meteo）
+            sourceText.setText("数据来源：" + WeatherSources.label(MainActivity.this)
+                    + "  ·  " + json.optString("timezone", ""));
 
             if (!rendered) {
                 rendered = true;
