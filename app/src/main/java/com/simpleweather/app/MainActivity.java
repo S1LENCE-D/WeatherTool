@@ -1219,10 +1219,10 @@ public class MainActivity extends Activity {
         return Theme.isDark(this) ? 0xFF9AA0A8 : 0xFF8A9099;
     }
 
-    /** v9.88.8：预警条文字色——浅色低饱和时柔粉底配深红棕字，其余白字 */
+    /** v9.88.9：预警条文字色——浅色低饱和时柔粉底配深蓝灰字(色相分离更清晰)，其余白字 */
     private int alertTextColor() {
         if (!Theme.alertMuted(this)) return 0xFFFFFFFF;
-        return Theme.isDark(this) ? 0xFFFFFFFF : 0xFF7E3438;
+        return Theme.isDark(this) ? 0xFFFFFFFF : 0xFF2F4A5E;
     }
 
     /** 刷新主页面通知卡片副标题 */

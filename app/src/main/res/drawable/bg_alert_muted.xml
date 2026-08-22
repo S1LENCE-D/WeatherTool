@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- v9.88.8 低饱和预警条背景：半透明红渐变，叠毛玻璃底透出柔粉，通透不灰 -->
+<!-- v9.88.9 低饱和预警条背景：半透明红渐变（比 v9.88.8 稍实，配深蓝灰字） -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
     <corners android:radius="14dp" />
     <gradient
-        android:startColor="#66E53935"
-        android:endColor="#59D93A40"
+        android:startColor="#73E53935"
+        android:endColor="#66D93A40"
         android:angle="0" />
 </shape>
