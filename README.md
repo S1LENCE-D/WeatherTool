@@ -2,7 +2,7 @@
 
 > 极简、纯净、零广告的安卓天气应用 · 酷安 @Eartecd
 >
-> 当前版本：**v9.88**（versionCode 111）
+> 当前版本：**v9.88.1**（versionCode 112）
 
 零第三方依赖，纯 Java + Android framework 编写（无 Compose / Kotlin），单 APK 约 **500KB**。
 
@@ -41,7 +41,7 @@ python3 build_release.py
 ```
 
 流程：注入版本信息 → aapt 打包资源 → javac 编译 → d8 转 dex → apksigner 签名。
-产物：`build/WeatherTool_v9.88.apk`。
+产物：`build/WeatherTool_v9.88.1.apk`。
 
 历史分支构建脚本已归档至 `scripts/legacy/`（115% 界面 / 大字版），仅作参考。
 
@@ -65,6 +65,7 @@ git tag v9.88 && git push origin v9.88
 
 ## 更新记录
 
+- **v9.88.1**：修复无 GPS 硬件设备（如小米平板）获取定位时闪退——此类设备系统无 GPS_PROVIDER，`getLastKnownLocation` / `requestLocationUpdates` 会抛 IllegalArgumentException（非 SecurityException）；已扩大异常捕获 + 监听前 provider 存在性检查；日志标题版本号改为动态读取
 - **v9.88**：毛玻璃背景 + 多尺寸自适应（v9.88→9.88.11 共 12 轮迭代，最终版）
   - 小组件：毛玻璃四层质感、2x4 高度三档显隐、4x4 尺寸可调修复、载入崩溃修复
   - 预警：详情弹窗等级色条填满、主页横条开关即时重绘、低饱和水彩配色、文字可读性优化

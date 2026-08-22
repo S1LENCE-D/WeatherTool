@@ -2322,6 +2322,19 @@ public class MainActivity extends Activity {
             if (!locator.hasPermission()) return;   // 无权限：GPS 本就不可用
             gpsMgr = (LocationManager) getSystemService(LOCATION_SERVICE);
             if (gpsMgr == null) return;
+            // v9.88.1：无 GPS 硬件设备（平板类）系统不存在 GPS_PROVIDER，
+            // 直接 requestLocationUpdates 会抛 IllegalArgumentException 闪退；
+            // 先查 provider 列表，不存在则整个 GPS 监听跳过（定位走 IP/网络）
+            boolean gpsProviderExists = false;
+            try {
+                java.util.List<String> allProvs = gpsMgr.getAllProviders();
+                gpsProviderExists = allProvs != null
+                        && allProvs.contains(LocationManager.GPS_PROVIDER);
+            } catch (Exception ignored) { }
+            if (!gpsProviderExists) {
+                LogFile.i("GPSWatch", "无 GPS provider（无硬件或 ROM 未注册），跳过 GPS 监听");
+                return;
+            }
             gpsListener = new LocationListener() {
                 @Override
                 public void onLocationChanged(Location l) {
@@ -2375,7 +2388,9 @@ public class MainActivity extends Activity {
                 LogFile.e("Main", "GNSS 状态注册失败", e);
             }
             gpsWatching = true;
-        } catch (SecurityException ignored) { }
+        } catch (Exception e) {   // v9.88.1：不只 SecurityException——无 GPS 硬件时各 API 可能抛 IllegalArgumentException
+            LogFile.e("Main", "startGpsWatch 异常", e);
+        }
     }
 
     private void stopGpsWatch() {

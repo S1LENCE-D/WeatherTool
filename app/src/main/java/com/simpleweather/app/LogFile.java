@@ -58,7 +58,7 @@ public class LogFile {
                             out = ctx.getContentResolver().openOutputStream(currentUri);
                             currentPath = "Download/" + currentName;
                             initState = currentPath;
-                            header();
+                            header(ctx);
                             return;
                         }
                         reason = "insert 返回 null";
@@ -71,7 +71,7 @@ public class LogFile {
                     currentFile = f;
                     currentPath = "私有目录(Download 写入失败: " + reason + ") " + f.getAbsolutePath();
                     initState = currentPath;
-                    header();
+                    header(ctx);
                     return;
                 }
                 // API<29：公共 Download 直写
@@ -84,7 +84,7 @@ public class LogFile {
                         currentFile = f;
                         currentPath = f.getAbsolutePath();
                         initState = currentPath;
-                        header();
+                        header(ctx);
                         return;
                     }
                     reason = "Download 目录不可用";
@@ -96,7 +96,7 @@ public class LogFile {
                 currentFile = f;
                 currentPath = "私有目录(Download 写入失败: " + reason + ") " + f.getAbsolutePath();
                 initState = currentPath;
-                header();
+                header(ctx);
             } catch (Exception e) {
                 out = null;
                 initState = "日志初始化失败: " + e;
@@ -176,8 +176,14 @@ public class LogFile {
         write('E', tag, sb.toString());
     }
 
-    private static void header() {
-        i(TAG, "==== 简洁天气 v9.87 日志会话开始 ====");
+    /** v9.88.1：版本号动态读取（不再写死，避免发版后日志标题停留在旧版） */
+    private static void header(Context ctx) {
+        String ver = "?";
+        try {
+            ver = ctx.getPackageManager()
+                    .getPackageInfo(ctx.getPackageName(), 0).versionName;
+        } catch (Exception ignored) { }
+        i(TAG, "==== 简洁天气 v" + ver + " 日志会话开始 ====");
         i(TAG, "SDK=" + Build.VERSION.SDK_INT + " target=33");
         i(TAG, "设备=" + Build.MANUFACTURER + " " + Build.MODEL);
         i(TAG, "ROM=" + Build.DISPLAY + " | " + Build.FINGERPRINT);

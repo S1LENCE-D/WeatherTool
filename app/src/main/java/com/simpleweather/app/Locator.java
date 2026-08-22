@@ -29,6 +29,9 @@ import java.util.concurrent.TimeUnit;
  * v9.25：IP 定位源重构——国内源优先（百度 qifu-api / ip.useragentinfo 返回
  *         省市名，经 CityTable 城市表换算坐标），修复国外数据库漂移上海问题；
  *         国外三路降级兜底；缓存 key 改名作废旧坐标。
+ * v9.88.1：修复无 GPS 硬件设备（平板类）闪退——此类设备系统无 GPS_PROVIDER，
+ *         对不存在 provider 调用 getLastKnownLocation 抛 IllegalArgumentException
+ *         （非 SecurityException），原 catch 拦不住；统一扩大为 catch(Exception)。
  */
 public class Locator {
 
@@ -103,7 +106,7 @@ public class Locator {
                 Location l = lm.getLastKnownLocation(p);
                 if (l == null) continue;
                 if (best == null || moreAccurate(l, best)) best = l;
-            } catch (SecurityException ignored) { }
+            } catch (Exception ignored) { }   // v9.88.1：同 lastKnownFresh——无 GPS 硬件时 provider 缺失抛异常
         }
         return best;
     }
@@ -151,7 +154,7 @@ public class Locator {
                 if (l == null) continue;
                 if (now - l.getTime() > LASTKNOWN_FRESH_MS) continue; // 丢弃 2 分钟前的旧缓存
                 if (best == null || moreAccurate(l, best)) best = l;
-            } catch (SecurityException ignored) { }
+            } catch (Exception ignored) { }   // v9.88.1：无 GPS 硬件设备 provider 不存在时抛 IllegalArgumentException
         }
         return best;
     }
