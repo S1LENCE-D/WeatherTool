@@ -418,10 +418,11 @@ public class WeatherWidgetProvider extends AppWidgetProvider {
                     views.setTextViewTextSize(popId(i), TypedValue.COMPLEX_UNIT_SP, 11f * s);
                     views.setTextViewTextSize(hiId(i), TypedValue.COMPLEX_UNIT_SP, 12f * s);
                     views.setTextViewTextSize(loId(i), TypedValue.COMPLEX_UNIT_SP, 12f * s);
-                    // 行距按高度分档：越高越宽松，4x4 时内容铺满不紧凑
+                    // 行距按高度分档：越高越宽松，默认 4x4(250dp) 也有合理行距
                     int rp;
                     if (h >= 450) rp = Math.round(6f * s);
-                    else if (h >= 350) rp = Math.round(4f * s);
+                    else if (h >= 350) rp = Math.round(4.5f * s);
+                    else if (h >= 280) rp = Math.round(3f * s);
                     else rp = Math.round(2f * s);
                     views.setViewPadding(rowId(i), 0, rp, 0, rp);
                 }

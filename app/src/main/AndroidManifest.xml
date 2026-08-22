@@ -84,7 +84,7 @@
         <!-- v9.21：桌面小组件。两个独立 Provider 各自固定布局，不再按尺寸切换（拉伸不会换布局） -->
         <receiver
             android:name=".WeatherWidgetProvider2x2"
-            android:label="天气 · 当日"
+            android:label="单日天气"
             android:icon="@drawable/ic_launcher"
             android:exported="true">
             <intent-filter>
@@ -97,7 +97,7 @@
 
         <receiver
             android:name=".WeatherWidgetProvider2x4"
-            android:label="天气 · 多日"
+            android:label="多日天气"
             android:icon="@drawable/ic_launcher"
             android:exported="true">
             <intent-filter>
