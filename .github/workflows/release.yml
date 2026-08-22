@@ -13,6 +13,10 @@
 # ============================================================
 name: Release Build
 
+# v9.88：显式授予 contents 写权限，否则 action-gh-release 无法创建 Release
+permissions:
+  contents: write
+
 on:
   push:
     tags:
