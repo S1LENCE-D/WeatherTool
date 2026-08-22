@@ -78,9 +78,6 @@ git tag v9.88 && git push origin v9.88
 
 ```
 app/                    # 主工程（纯 Java，包名 com.simpleweather.app）
-build_release.py        # 正式发布构建流水线（Linux，与 CI 一致）
-docs/RELEASE.md         # 构建→正式发布全流程文档（发版前必读）
-scripts/legacy/         # 历史构建/发布脚本归档（仅参考）
 .github/workflows/      # GitHub Actions 自动构建发布（推送 v* 标签触发）
 ```
 

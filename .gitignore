@@ -19,3 +19,9 @@ EXPERIENCE_*.md
 
 # 已弃用/未采用的 MIUIX 独立工程（本地保留，不纳入仓库）
 weathertool-miuix/
+
+# 内部流程文档 / 历史脚本 / 旧代码残留（仅本地保留）
+docs/RELEASE.md
+scripts/legacy/
+app/src/main/java_old/
+build_release.py
