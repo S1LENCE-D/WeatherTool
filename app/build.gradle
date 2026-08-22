@@ -16,8 +16,11 @@ android {
 
     signingConfigs {
         release {
-            if (System.getenv('SIGNING_KEYSTORE') != null) {
-                storeFile file(System.getenv('SIGNING_KEYSTORE'))
+            // v9.88：Actions 未配置 secrets 时 env 为空串（非 null），需判非空
+            // 否则 file('') 抛 Cannot convert '' to File，导致 CI 构建失败
+            String ks = System.getenv('SIGNING_KEYSTORE')
+            if (ks != null && !ks.isEmpty()) {
+                storeFile file(ks)
                 storePassword System.getenv('SIGNING_KEYSTORE_PASS')
                 keyAlias System.getenv('SIGNING_KEY_ALIAS')
                 keyPassword System.getenv('SIGNING_KEY_PASS')
@@ -34,7 +37,8 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            if (System.getenv('SIGNING_KEYSTORE') != null) {
+            String ks2 = System.getenv('SIGNING_KEYSTORE')
+            if (ks2 != null && !ks2.isEmpty()) {
                 signingConfig signingConfigs.release
             }
         }
