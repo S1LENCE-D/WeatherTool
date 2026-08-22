@@ -20,7 +20,9 @@ import java.util.Locale;
  *    API 29+ : MediaStore.Downloads（无需存储权限）
  *    失败降级 : App 私有 filesDir（一定可写，导出时经 SAF 存到用户指定位置）
  *    API<29  : 公共 Download 目录直写（需 WRITE_EXTERNAL_STORAGE，manifest maxSdkVersion=28）
- *  每次启动新建一份会话日志，Download 中保留最近 5 份；逐行实时写入并 flush。 */
+ *  v9.88.2：日志按「天」一份，同一天内闪退/重启复用同一文件追加写入
+ *  （不再按秒新建；会话间以 "==== 日志会话开始 ====" 分隔）。
+ *  Download 中保留最近 5 份（即最近 5 天）；逐行实时写入并 flush。 */
 public class LogFile {
     private static final String TAG = "LogFile";
     private static final String PREFIX = "WeatherTool_log";
@@ -38,12 +40,15 @@ public class LogFile {
 
     private LogFile() { }
 
-    /** App 启动时调用：清理旧日志 -> 新建会话日志（自动降级）-> 写设备信息头 */
+    /** App 启动时调用：清理旧日志 -> 定位/新建当日会话日志（自动降级）-> 写设备信息头。
+     *  v9.88.2：日志按「天」一个文件，同一天内闪退/重启复用同一文件追加写入
+     *  （此前按秒命名，每次崩溃重启都新建文件，排查困难）。 */
     public static void init(Context ctx) {
         synchronized (LOCK) {
             try {
                 cleanup(ctx);
-                currentName = PREFIX + "_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
+                // 按天命名：同一天内多次启动都落到同一个文件（末尾追加）
+                currentName = PREFIX + "_" + new SimpleDateFormat("yyyyMMdd", Locale.US)
                         .format(new Date()) + ".log";
                 String reason = "";
                 if (Build.VERSION.SDK_INT >= 29) {
@@ -52,6 +57,16 @@ public class LogFile {
                         cv.put(MediaStore.Downloads.DISPLAY_NAME, currentName);
                         cv.put(MediaStore.Downloads.MIME_TYPE, "text/plain");
                         cv.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+                        // 先查当日已有文件：有则追加打开（同天复用），无则新建
+                        Uri exist = findExisting(ctx, currentName);
+                        if (exist != null) {
+                            currentUri = exist;
+                            out = ctx.getContentResolver().openOutputStream(exist, "wa");
+                            currentPath = "Download/" + currentName + "（当日复用·追加）";
+                            initState = currentPath;
+                            header(ctx);
+                            return;
+                        }
                         currentUri = ctx.getContentResolver()
                                 .insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
                         if (currentUri != null) {
@@ -65,22 +80,22 @@ public class LogFile {
                     } catch (Exception e) {
                         reason = e.getClass().getSimpleName() + ": " + e.getMessage();
                     }
-                    // 降级：App 私有目录
+                    // 降级：App 私有目录（追加模式，同天复用）
                     File f = new File(ctx.getFilesDir(), currentName);
-                    out = new FileOutputStream(f);
+                    out = new FileOutputStream(f, true);
                     currentFile = f;
                     currentPath = "私有目录(Download 写入失败: " + reason + ") " + f.getAbsolutePath();
                     initState = currentPath;
                     header(ctx);
                     return;
                 }
-                // API<29：公共 Download 直写
+                // API<29：公共 Download 直写（追加模式，同天复用）
                 try {
                     File dir = Environment.getExternalStoragePublicDirectory(
                             Environment.DIRECTORY_DOWNLOADS);
                     if (dir != null && (dir.exists() || dir.mkdirs())) {
                         File f = new File(dir, currentName);
-                        out = new FileOutputStream(f, false);
+                        out = new FileOutputStream(f, true);
                         currentFile = f;
                         currentPath = f.getAbsolutePath();
                         initState = currentPath;
@@ -92,7 +107,7 @@ public class LogFile {
                     reason = e.getClass().getSimpleName() + ": " + e.getMessage();
                 }
                 File f = new File(ctx.getFilesDir(), currentName);
-                out = new FileOutputStream(f);
+                out = new FileOutputStream(f, true);
                 currentFile = f;
                 currentPath = "私有目录(Download 写入失败: " + reason + ") " + f.getAbsolutePath();
                 initState = currentPath;
@@ -206,6 +221,30 @@ public class LogFile {
     }
 
     /** 清理旧会话日志：仅保留最近 KEEP 份（仅 Download 中的） */
+    /** v9.88.2：查询 Download 中是否已有同名日志文件（同日复用用）。
+     *  先查后插，避免 MediaStore 对同名 insert 自动改名生成 "(1)" 副本。 */
+    private static Uri findExisting(Context ctx, String name) {
+        try {
+            android.database.Cursor c = ctx.getContentResolver().query(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    new String[]{MediaStore.Downloads._ID},
+                    MediaStore.Downloads.DISPLAY_NAME + "=?",
+                    new String[]{name},
+                    MediaStore.Downloads.DATE_ADDED + " DESC");
+            if (c != null) {
+                try {
+                    if (c.moveToFirst()) {
+                        return android.content.ContentUris.withAppendedId(
+                                MediaStore.Downloads.EXTERNAL_CONTENT_URI, c.getLong(0));
+                    }
+                } finally {
+                    c.close();
+                }
+            }
+        } catch (Exception ignored) { }
+        return null;
+    }
+
     private static void cleanup(Context ctx) {
         try {
             if (Build.VERSION.SDK_INT >= 29) {
