@@ -706,10 +706,11 @@ public class MainActivity extends Activity {
                         new android.text.SpannableStringBuilder();
                 sb.append("\u25CF ");
                 sb.setSpan(new android.text.style.ForegroundColorSpan(
-                                alertLevelColorSoft(first)),
+                                alertDotColor(first)),
                         0, 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 sb.append(String.valueOf(alertResult.local.size()))
                         .append(" 条气象预警 · ").append(first);
+                alertText.setTextColor(alertTextColor());
                 alertText.setSingleLine(true);
                 alertText.setEllipsize(android.text.TextUtils.TruncateAt.END);
                 alertText.setText(sb);
@@ -777,9 +778,10 @@ public class MainActivity extends Activity {
                                     new android.text.SpannableStringBuilder();
                             sb.append("\u25CF ");   // ● 等级色点
                             sb.setSpan(new android.text.style.ForegroundColorSpan(
-                                            alertLevelColorSoft(first)),
+                                            alertDotColor(first)),
                                     0, 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                             sb.append(String.valueOf(r.local.size())).append(" 条气象预警 · ").append(first);
+                            alertText.setTextColor(alertTextColor());
                             alertText.setSingleLine(true);
                             alertText.setEllipsize(android.text.TextUtils.TruncateAt.END);
                             alertText.setText(sb);
@@ -1199,12 +1201,28 @@ public class MainActivity extends Activity {
      * 用于主页预警条圆点——圆点始终叠在深色预警条背景上，
      * 需要保持高明度才看得清；色条（浅卡片底）则用 alertLevelColor。
      */
-    private int alertLevelColorSoft(String title) {
+    private int alertDotColor(String title) {
+        boolean muted = Theme.alertMuted(this);
+        if (muted && !Theme.isDark(this)) {
+            // 浅色低饱和：预警条为半透明柔粉底，圆点需加深一档才可见
+            if (title.contains("红色")) return 0xFFB04A4F;
+            if (title.contains("橙色")) return 0xFFB07C40;
+            if (title.contains("黄色")) return 0xFFA88F3E;
+            if (title.contains("蓝色")) return 0xFF4A7FA8;
+            return 0xFF7E868F;
+        }
+        // 深色底 / 非低饱和（鲜红底）：恒用亮水彩点
         if (title.contains("红色")) return 0xFFE57373;
         if (title.contains("橙色")) return 0xFFFFB74D;
         if (title.contains("黄色")) return 0xFFFFD54F;
         if (title.contains("蓝色")) return 0xFF64B5F6;
         return Theme.isDark(this) ? 0xFF9AA0A8 : 0xFF8A9099;
+    }
+
+    /** v9.88.8：预警条文字色——浅色低饱和时柔粉底配深红棕字，其余白字 */
+    private int alertTextColor() {
+        if (!Theme.alertMuted(this)) return 0xFFFFFFFF;
+        return Theme.isDark(this) ? 0xFFFFFFFF : 0xFF7E3438;
     }
 
     /** 刷新主页面通知卡片副标题 */
