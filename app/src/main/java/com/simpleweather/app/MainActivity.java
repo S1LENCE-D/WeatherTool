@@ -706,7 +706,7 @@ public class MainActivity extends Activity {
                         new android.text.SpannableStringBuilder();
                 sb.append("\u25CF ");
                 sb.setSpan(new android.text.style.ForegroundColorSpan(
-                                alertLevelColor(first)),
+                                alertLevelColorSoft(first)),
                         0, 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 sb.append(String.valueOf(alertResult.local.size()))
                         .append(" 条气象预警 · ").append(first);
@@ -777,7 +777,7 @@ public class MainActivity extends Activity {
                                     new android.text.SpannableStringBuilder();
                             sb.append("\u25CF ");   // ● 等级色点
                             sb.setSpan(new android.text.style.ForegroundColorSpan(
-                                            alertLevelColor(first)),
+                                            alertLevelColorSoft(first)),
                                     0, 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                             sb.append(String.valueOf(r.local.size())).append(" 条气象预警 · ").append(first);
                             alertText.setSingleLine(true);
@@ -1186,10 +1186,24 @@ public class MainActivity extends Activity {
     /** 预警等级色：红/橙/黄/蓝，默认灰；v9.88.5 支持低饱和柔和色（外观设置开启） */
     private int alertLevelColor(String title) {
         boolean muted = Theme.alertMuted(this);
-        if (title.contains("红色")) return muted ? 0xFFBE8E94 : 0xFFE53935;
-        if (title.contains("橙色")) return muted ? 0xFFC2A284 : 0xFFFB8C00;
-        if (title.contains("黄色")) return muted ? 0xFFC0B185 : 0xFFF9A825;
-        if (title.contains("蓝色")) return muted ? 0xFF85A6C9 : 0xFF1E88E5;
+        // v9.88.7：低饱和改用 Material 300 水彩粉彩，干净不浊、深浅主题皆协调
+        if (title.contains("红色")) return muted ? 0xFFE57373 : 0xFFE53935;
+        if (title.contains("橙色")) return muted ? 0xFFFFB74D : 0xFFFB8C00;
+        if (title.contains("黄色")) return muted ? 0xFFFFD54F : 0xFFF9A825;
+        if (title.contains("蓝色")) return muted ? 0xFF64B5F6 : 0xFF1E88E5;
+        return Theme.isDark(this) ? 0xFF9AA0A8 : 0xFF8A9099;
+    }
+
+    /**
+     * v9.88.7：预警等级亮色（恒为水彩粉彩，不随低饱和开关变化）。
+     * 用于主页预警条圆点——圆点始终叠在深色预警条背景上，
+     * 需要保持高明度才看得清；色条（浅卡片底）则用 alertLevelColor。
+     */
+    private int alertLevelColorSoft(String title) {
+        if (title.contains("红色")) return 0xFFE57373;
+        if (title.contains("橙色")) return 0xFFFFB74D;
+        if (title.contains("黄色")) return 0xFFFFD54F;
+        if (title.contains("蓝色")) return 0xFF64B5F6;
         return Theme.isDark(this) ? 0xFF9AA0A8 : 0xFF8A9099;
     }
 
