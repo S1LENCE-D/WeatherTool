@@ -206,11 +206,13 @@
             android:textSize="11sp"
             android:gravity="center"
             android:maxLines="1" />
-        <!-- v9.88.1：弹性占位，日期/降水靠左、温度靠右，消除日期后空白 -->
-        <Space
+        <!-- v9.88.2：弹性占位（RemoteViews 白名单不支持 Space，用空 TextView） -->
+        <TextView
             android:layout_width="0dp"
             android:layout_height="1dp"
-            android:layout_weight="1" />
+            android:layout_weight="1"
+            android:text=""
+            android:background="@null" />
 
         <TextView
             android:id="@+id/wHi0"
@@ -266,11 +268,13 @@
             android:textSize="11sp"
             android:gravity="center"
             android:maxLines="1" />
-        <!-- v9.88.1：弹性占位，日期/降水靠左、温度靠右，消除日期后空白 -->
-        <Space
+        <!-- v9.88.2：弹性占位（RemoteViews 白名单不支持 Space，用空 TextView） -->
+        <TextView
             android:layout_width="0dp"
             android:layout_height="1dp"
-            android:layout_weight="1" />
+            android:layout_weight="1"
+            android:text=""
+            android:background="@null" />
 
         <TextView
             android:id="@+id/wHi1"
@@ -326,11 +330,13 @@
             android:textSize="11sp"
             android:gravity="center"
             android:maxLines="1" />
-        <!-- v9.88.1：弹性占位，日期/降水靠左、温度靠右，消除日期后空白 -->
-        <Space
+        <!-- v9.88.2：弹性占位（RemoteViews 白名单不支持 Space，用空 TextView） -->
+        <TextView
             android:layout_width="0dp"
             android:layout_height="1dp"
-            android:layout_weight="1" />
+            android:layout_weight="1"
+            android:text=""
+            android:background="@null" />
 
         <TextView
             android:id="@+id/wHi2"
@@ -386,11 +392,13 @@
             android:textSize="11sp"
             android:gravity="center"
             android:maxLines="1" />
-        <!-- v9.88.1：弹性占位，日期/降水靠左、温度靠右，消除日期后空白 -->
-        <Space
+        <!-- v9.88.2：弹性占位（RemoteViews 白名单不支持 Space，用空 TextView） -->
+        <TextView
             android:layout_width="0dp"
             android:layout_height="1dp"
-            android:layout_weight="1" />
+            android:layout_weight="1"
+            android:text=""
+            android:background="@null" />
 
         <TextView
             android:id="@+id/wHi3"
@@ -446,11 +454,13 @@
             android:textSize="11sp"
             android:gravity="center"
             android:maxLines="1" />
-        <!-- v9.88.1：弹性占位，日期/降水靠左、温度靠右，消除日期后空白 -->
-        <Space
+        <!-- v9.88.2：弹性占位（RemoteViews 白名单不支持 Space，用空 TextView） -->
+        <TextView
             android:layout_width="0dp"
             android:layout_height="1dp"
-            android:layout_weight="1" />
+            android:layout_weight="1"
+            android:text=""
+            android:background="@null" />
 
         <TextView
             android:id="@+id/wHi4"
