@@ -160,12 +160,6 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // v9.90：Compose 引擎开关打开时，转发到 Compose 新界面（经典界面兜底）
-        if (Theme.isCompose(this)) {
-            startActivity(new Intent(this, ComposeWeatherActivity.class));
-            finish();
-            return;
-        }
         // v9.87-diag：启动时报告推送链路关键权限状态
         try {
             StringBuilder sb = new StringBuilder("启动诊断: SDK=")
@@ -1084,13 +1078,13 @@ public class MainActivity extends Activity {
                         if (dead) return;
                         if (r == null) {
                             t2.setText(ck + " · 预警服务暂不可用");
-                            failBox.setText("\uE002  预警服务暂不可用\n请检查网络后点下方按钮重试");
+                            failBox.setText("预警服务暂不可用\n请检查网络后点下方按钮重试");
                             failBox.setVisibility(View.VISIBLE);
                             return;
                         }
                         if (r.local.isEmpty()) {
                             t2.setText(ck + " · 暂无气象预警");
-                            emptyBox.setText("\uE86C  本地区暂无气象预警");
+                            emptyBox.setText("本地区暂无气象预警");
                             emptyBox.setVisibility(View.VISIBLE);
                             return;
                         }
@@ -1132,7 +1126,7 @@ public class MainActivity extends Activity {
             txtBox.setPadding(dp(12), dp(12), 0, dp(12));
 
             TextView warn = new TextView(this);
-            warn.setText("\uE002  " + t);   // warning 图标（主页已加载图标字体）
+            warn.setText(t);   // v9.88.5：去掉 Material 图标前缀（Google Sans 下无字形显示为豆腐块）
             warn.setTextColor(txtColor);
             warn.setTextSize(15f);
             warn.setLineSpacing(dp(3), 1f);
@@ -1156,12 +1150,13 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** 预警等级色：红/橙/黄/蓝，默认灰 */
+    /** 预警等级色：红/橙/黄/蓝，默认灰；v9.88.5 支持低饱和柔和色（外观设置开启） */
     private int alertLevelColor(String title) {
-        if (title.contains("红色")) return 0xFFE53935;
-        if (title.contains("橙色")) return 0xFFFB8C00;
-        if (title.contains("黄色")) return 0xFFF9A825;
-        if (title.contains("蓝色")) return 0xFF1E88E5;
+        boolean muted = Theme.alertMuted(this);
+        if (title.contains("红色")) return muted ? 0xFFC08D8A : 0xFFE53935;
+        if (title.contains("橙色")) return muted ? 0xFFC8A276 : 0xFFFB8C00;
+        if (title.contains("黄色")) return muted ? 0xFFC9B27E : 0xFFF9A825;
+        if (title.contains("蓝色")) return muted ? 0xFF8FA8C4 : 0xFF1E88E5;
         return Theme.isDark(this) ? 0xFF9AA0A8 : 0xFF8A9099;
     }
 
@@ -4101,16 +4096,16 @@ public class MainActivity extends Activity {
                     @Override public void run() { pickTheme("light", d); }
                 });
 
-        // v9.90：界面引擎（经典 View / Compose 新界面）
-        stSection(page, "界面引擎", "实验性 Compose 界面，可在两套 UI 间随时切换", dark);
-        stOption(page, "engine_view", "经典界面", "Java View · 稳定默认", dark,
-                !Theme.isCompose(this), pager, new Runnable() {
-                    @Override public void run() { pickEngine("view", d); }
-                });
-        stOption(page, "engine_compose", "Compose 新界面", "Compose + Material 3 · 实验性", dark,
-                Theme.isCompose(this), pager, new Runnable() {
-                    @Override public void run() { pickEngine("compose", d); }
-                });
+        // v9.88.5：预警低饱和显示开关（引擎已收敛为经典 Java View）
+        stSection(page, "预警显示", "开启后预警提示使用低饱和柔和配色", dark);
+        final M3Switch muteSw = new M3Switch(this);
+        muteSw.setChecked(Theme.alertMuted(this));
+        muteSw.setOnCheckedChangeListener(new M3Switch.OnCheckedChangeListener() {
+            @Override public void onCheckedChanged(M3Switch b, boolean on) {
+                Theme.setAlertMuted(MainActivity.this, on);
+            }
+        });
+        stSwitchRow(page, "预警信息低饱和显示", "红/橙/黄/蓝等级色替换为低饱和柔和色", dark, muteSw);
 
         return page;
     }
@@ -4120,20 +4115,6 @@ public class MainActivity extends Activity {
         Theme.setMode(this, m);
         reopenSettings = true;
         recreate();
-    }
-
-    /** v9.90：切换界面引擎（compose 时立即进入新界面；view 时留在经典界面） */
-    private void pickEngine(String e, Dialog d) {
-        if (Theme.ENGINE_COMPOSE.equals(e) && Theme.isCompose(this)) { d.dismiss(); return; }
-        if (Theme.ENGINE_VIEW.equals(e) && !Theme.isCompose(this)) { d.dismiss(); return; }
-        Theme.setEngine(this, e);
-        d.dismiss();
-        if (Theme.ENGINE_COMPOSE.equals(e)) {
-            startActivity(new Intent(this, ComposeWeatherActivity.class));
-            finish();
-        } else {
-            recreate();
-        }
     }
 
     private LinearLayout buildLocBgPage(final boolean dark, final Dialog d, final SettingsPager pager) {

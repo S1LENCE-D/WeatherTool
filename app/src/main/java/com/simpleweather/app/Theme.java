@@ -9,34 +9,26 @@ import android.view.View;
  * 主题管理：深色 / 浅色 / 跟随系统（默认跟随系统）。
  * 所有界面颜色一律经由此处取用，保证双主题统一。
  *
- * v9.90：新增两个维度——
- *   引擎 engine：view（经典 Java View 界面，默认）/ compose（Compose + Material 3 新界面）
- * 经典界面走 View 色板，Compose 界面走 MaterialTheme（与经典界面同源色板）。
+ * v9.88.5：界面引擎已收敛——仅保留经典 Java View 界面（Compose 引擎相关代码已清除）。
  */
 public class Theme {
 
     public static final String PREFS = "weather_theme";
     public static final String KEY = "mode";          // "system" | "dark" | "light"
 
-    // ---------- v9.90：界面引擎 ----------
+    // ---------- v9.88.5：预警低饱和显示 ----------
 
-    public static final String ENGINE_KEY = "engine"; // "view" | "compose"
-    public static final String ENGINE_VIEW = "view";
-    public static final String ENGINE_COMPOSE = "compose";
+    public static final String ALERT_MUTED_KEY = "alert_muted";
 
-    /** 当前界面引擎（默认经典 View） */
-    public static String engine(Context c) {
+    /** 是否开启预警低饱和显示（默认关闭） */
+    public static boolean alertMuted(Context c) {
         return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .getString(ENGINE_KEY, ENGINE_VIEW);
+                .getBoolean(ALERT_MUTED_KEY, false);
     }
 
-    public static void setEngine(Context c, String e) {
+    public static void setAlertMuted(Context c, boolean v) {
         c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .edit().putString(ENGINE_KEY, e).apply();
-    }
-
-    public static boolean isCompose(Context c) {
-        return ENGINE_COMPOSE.equals(engine(c));
+                .edit().putBoolean(ALERT_MUTED_KEY, v).apply();
     }
 
     public static String mode(Context c) {
