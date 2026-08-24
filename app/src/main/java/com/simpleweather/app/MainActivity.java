@@ -35,6 +35,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.widget.ImageView;
 import android.view.ViewGroup;
+import android.view.Display;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowManager;
@@ -160,6 +161,23 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // v9.90：窗口请求屏幕最高刷新率（LTPO 屏避免系统降频到 60Hz；低刷屏无影响）
+        if (Build.VERSION.SDK_INT >= 30) {
+            try {
+                Display d = getDisplay();
+                if (d != null) {
+                    float max = 0f;
+                    for (Display.Mode m : d.getSupportedModes()) {
+                        if (m.getRefreshRate() > max) max = m.getRefreshRate();
+                    }
+                    if (max > 0f) {
+                        WindowManager.LayoutParams lp = getWindow().getAttributes();
+                        lp.preferredRefreshRate = max;
+                        getWindow().setAttributes(lp);
+                    }
+                }
+            } catch (Exception ignored) { }
+        }
         // v9.87-diag：启动时报告推送链路关键权限状态
         try {
             StringBuilder sb = new StringBuilder("启动诊断: SDK=")
@@ -191,8 +209,8 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
             Diag.i("启动诊断异常: " + e);
         }
-        LogFile.init(this);   // v9.87-fix：定位诊断日志（Download/WeatherTool_log_*.log）
-        if (!LogFile.state().startsWith("Download/")) {
+        LogFile.init(this);   // v9.90：诊断日志（Download/WeatherTool_log.log 固定单文件）
+        if (LogFile.enabled() && !LogFile.state().startsWith("Download/")) {
             // 降级提示：Download 写入失败（移植 ROM MediaProvider 异常等），日志在私有目录
             final String st = LogFile.state();
             new android.os.Handler(getMainLooper()).postDelayed(new Runnable() {
@@ -3713,6 +3731,13 @@ public class MainActivity extends Activity {
                                 buildCustomAlertPage(dark, d, null));
                     }
                 });
+        // v9.90：诊断日志独立栏目（写入开关 · 大小上限 · 导出）
+        stEntry(listPage, "诊断日志", "写入开关 · 大小上限 · 导出", logLabel(), dark, new Runnable() {
+            @Override public void run() {
+                openSettingsDetail(dark, listPage, detailPage, "诊断日志",
+                        buildLogPage(dark, d, null));
+            }
+        });
 
         root.addView(listPage);
         root.addView(detailPage);
@@ -3976,6 +4001,13 @@ public class MainActivity extends Activity {
         return "自动切换";
     }
 
+    /** v9.90：诊断日志入口副标题（开关状态 + 大小上限） */
+    private String logLabel() {
+        if (!LogFile.enabled()) return "已关闭";
+        int mb = LogFile.maxMb();
+        return mb > 0 ? mb + "MB 上限" : "不限大小";
+    }
+
     private String customAlertLabel() {
         if (!CustomAlert.enabled(this)) return "未开启";
         int n = 0;
@@ -4215,39 +4247,6 @@ public class MainActivity extends Activity {
                     @Override public void run() { pickLoc("ip", rows); }
                 });
 
-        // v9.87-fix：导出诊断日志（SAF 保存到用户指定位置，任何 ROM 都可用）
-        LinearLayout expRow = new LinearLayout(this);
-        expRow.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout.LayoutParams expLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        expLp.topMargin = dp(6);
-        expRow.setLayoutParams(expLp);
-        expRow.setBackgroundResource(dark ? R.drawable.bg_opt_row : R.drawable.bg_opt_row_light);
-        expRow.setPadding(dp(14), dp(12), dp(14), dp(12));
-        TextView expT = new TextView(this);
-        expT.setText("导出诊断日志");
-        expT.setTextSize(15);
-        expT.setTextColor(Theme.textPrimary(this));
-        expRow.addView(expT);
-        TextView expS = new TextView(this);
-        expS.setText("当前：" + LogFile.state());
-        expS.setTextSize(11);
-        expS.setTextColor(Theme.textSecondary(this));
-        LinearLayout.LayoutParams expSlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        expSlp.topMargin = dp(3);
-        expS.setLayoutParams(expSlp);
-        expRow.addView(expS);
-        expRow.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                Intent ei = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-                ei.addCategory(Intent.CATEGORY_OPENABLE);
-                ei.setType("text/plain");
-                ei.putExtra(Intent.EXTRA_TITLE, LogFile.fileName());
-                startActivityForResult(ei, REQ_EXPORT_LOG);
-            }
-        });
-        page.addView(expRow);
 
         stSection(page, "后台与推送", null, dark);
 
@@ -4311,6 +4310,92 @@ public class MainActivity extends Activity {
             r.row.setSelected(sel);
             r.radio.setSelected(sel);
         }
+    }
+
+    private void pickLogMaxMb(final int mb, final OptionRow[] rows) {
+        LogFile.setMaxMb(this, mb);
+        LogFile.i("Main", "日志大小上限 -> " + (mb > 0 ? mb + "MB" : "不限"));
+        Toast.makeText(this, mb > 0
+                        ? "日志上限：" + mb + "MB（超过自动清空重写）"
+                        : "日志上限：不限",
+                Toast.LENGTH_SHORT).show();
+        for (OptionRow r : rows) {
+            boolean sel = mb == Integer.parseInt((String) r.row.getTag());
+            r.row.setSelected(sel);
+            r.radio.setSelected(sel);
+        }
+    }
+
+    /** v9.90：诊断日志设置页（写入开关 + 大小上限 + 导出） */
+    private LinearLayout buildLogPage(final boolean dark, final Dialog d, final SettingsPager pager) {
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        stSection(page, "诊断日志", "统一写入单个日志文件", dark);
+        final M3Switch logSw = new M3Switch(this);
+        logSw.setChecked(LogFile.enabled());
+        stSwitchRow(page, "写入日志", "关闭后不再生成 / 追加日志", dark, logSw);
+        logSw.setOnCheckedChangeListener(new M3Switch.OnCheckedChangeListener() {
+            @Override public void onCheckedChanged(M3Switch b, boolean on) {
+                LogFile.setEnabled(MainActivity.this, on);
+                Toast.makeText(MainActivity.this,
+                        on ? "已开启日志写入" : "已关闭日志写入", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        final int curMb = LogFile.maxMb();
+        final OptionRow[] mbRows = new OptionRow[4];
+        mbRows[0] = stOption(page, "1", "1 MB", "日志超过 1MB 自动清空重写", dark,
+                curMb == 1, pager, new Runnable() {
+                    @Override public void run() { pickLogMaxMb(1, mbRows); }
+                });
+        mbRows[1] = stOption(page, "5", "5 MB", "默认上限", dark,
+                curMb == 5, pager, new Runnable() {
+                    @Override public void run() { pickLogMaxMb(5, mbRows); }
+                });
+        mbRows[2] = stOption(page, "10", "10 MB", null, dark,
+                curMb == 10, pager, new Runnable() {
+                    @Override public void run() { pickLogMaxMb(10, mbRows); }
+                });
+        mbRows[3] = stOption(page, "0", "不限", "不限制日志文件大小", dark,
+                curMb == 0 || (curMb != 1 && curMb != 5 && curMb != 10),
+                pager, new Runnable() {
+                    @Override public void run() { pickLogMaxMb(0, mbRows); }
+                });
+
+        // v9.87-fix：导出诊断日志（SAF 保存到用户指定位置，任何 ROM 都可用）
+        LinearLayout expRow = new LinearLayout(this);
+        expRow.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams expLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        expLp.topMargin = dp(6);
+        expRow.setLayoutParams(expLp);
+        expRow.setBackgroundResource(dark ? R.drawable.bg_opt_row : R.drawable.bg_opt_row_light);
+        expRow.setPadding(dp(14), dp(12), dp(14), dp(12));
+        TextView expT = new TextView(this);
+        expT.setText("导出诊断日志");
+        expT.setTextSize(15);
+        expT.setTextColor(Theme.textPrimary(this));
+        expRow.addView(expT);
+        TextView expS = new TextView(this);
+        expS.setText("当前：" + LogFile.state());
+        expS.setTextSize(11);
+        expS.setTextColor(Theme.textSecondary(this));
+        LinearLayout.LayoutParams expSlp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        expSlp.topMargin = dp(3);
+        expS.setLayoutParams(expSlp);
+        expRow.addView(expS);
+        expRow.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                Intent ei = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                ei.addCategory(Intent.CATEGORY_OPENABLE);
+                ei.setType("text/plain");
+                ei.putExtra(Intent.EXTRA_TITLE, LogFile.fileName());
+                startActivityForResult(ei, REQ_EXPORT_LOG);
+            }
+        });
+        page.addView(expRow);
+        return page;
     }
 
     private LinearLayout buildCustomAlertPage(final boolean dark, final Dialog d, final SettingsPager pager) {

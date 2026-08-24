@@ -7,8 +7,7 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RadialGradient;
 import android.graphics.Shader;
-import android.os.Handler;
-import android.os.Looper;
+import android.view.Choreographer;
 import android.util.AttributeSet;
 import android.view.View;
 
@@ -23,7 +22,8 @@ import java.util.Random;
  *  雨       - 暗云 + 雨丝斜落
  *  雪       - 暗云 + 雪花飘落（左右摇摆）
  *  雷暴     - 暗云 + 雨丝 + 随机闪电
- * 60fps Handler 驱动，粒子预分配，无每帧对象创建。
+ * v9.90：Choreographer 帧回调驱动（跟随屏幕刷新率，60/90/120/144Hz 自适应），
+ * 粒子已按时间驱动（dt 秒），高刷下动画速度不变、更顺滑；粒子预分配，无每帧对象创建。
  */
 public class WeatherBackView extends View {
 
@@ -56,12 +56,12 @@ public class WeatherBackView extends View {
     }
 
     private final Random rnd = new Random();
-    private final Handler handler = new Handler(Looper.getMainLooper());
-    private final Runnable ticker = new Runnable() {
+    // v9.90：Choreographer 帧回调——每帧 vsync 触发，自动匹配屏幕刷新率
+    private final Choreographer.FrameCallback frame = new Choreographer.FrameCallback() {
         @Override
-        public void run() {
+        public void doFrame(long frameTimeNanos) {
             invalidate();
-            handler.postDelayed(this, 16);
+            Choreographer.getInstance().postFrameCallback(this);
         }
     };
 
@@ -128,13 +128,13 @@ public class WeatherBackView extends View {
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-        handler.removeCallbacks(ticker);
-        handler.post(ticker);
+        Choreographer.getInstance().removeFrameCallback(frame);
+        Choreographer.getInstance().postFrameCallback(frame);
     }
 
     @Override
     protected void onDetachedFromWindow() {
-        handler.removeCallbacks(ticker);
+        Choreographer.getInstance().removeFrameCallback(frame);
         super.onDetachedFromWindow();
     }
 
@@ -270,7 +270,7 @@ public class WeatherBackView extends View {
         } catch (Throwable t) {
             // 渲染异常：停止特效动画（保留背景渐变），避免连环崩溃
             stopped = true;
-            handler.removeCallbacks(ticker);
+            Choreographer.getInstance().removeFrameCallback(frame);
         }
     }
 
@@ -391,6 +391,7 @@ public class WeatherBackView extends View {
             cv.scale(s, s);
             if (cloudRg != null) {
                 p.setShader(cloudRg);
+                p.setAlpha(255);   // v9.90.1：显式恢复 alpha，防闪电残留污染云朵透明度
                 cv.drawPath(cloudPath, p);
                 p.setShader(null);
             } else {
@@ -477,7 +478,10 @@ public class WeatherBackView extends View {
             flash *= 0.86f;
             p.setColor(Color.argb((int) (flash * 110f), 255, 245, 210));
             cv.drawRect(0, 0, w, h, p);
-            if (flash < 0.03f) flash = 0f;
+            if (flash < 0.03f) {
+                flash = 0f;
+                p.setAlpha(255);   // v9.90.1：恢复 Paint alpha，防云朵被残留半透明污染
+            }
         }
     }
 }

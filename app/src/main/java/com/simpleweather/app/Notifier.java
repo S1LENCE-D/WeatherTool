@@ -31,6 +31,7 @@ public final class Notifier {
     public static final int ID_ALERT = 2002;    // 预警提醒
     public static final int ID_FG = 3003;       // v9.87：前台服务占位通知（服务结束即移除）
     public static final int ID_CUSTOM = 4005;  // v9.87test：自定义气象提醒
+    public static final int ID_LOG = 5006;     // v9.90：诊断日志写满提示（低打扰）
 
     private Notifier() { }
 
@@ -168,6 +169,27 @@ public final class Notifier {
                 (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm == null) return;
         nm.notify(ID_CUSTOM, b.build());
+    }
+
+    /** v9.90：诊断日志写满提示（低打扰：无声音无震动，仅状态栏出现，点击进 App） */
+    public static void notifyLogFull(Context c, String body) {
+        ensureChannels(c);
+        Notification.Builder b = Build.VERSION.SDK_INT >= 26
+                ? new Notification.Builder(c, CH_REFRESH)
+                : new Notification.Builder(c);
+        b.setSmallIcon(R.drawable.ic_cloud);
+        b.setContentTitle("简洁天气 · 诊断日志");
+        b.setContentText(body);
+        b.setStyle(new Notification.BigTextStyle().bigText(body));
+        b.setContentIntent(mainIntent(c));
+        b.setAutoCancel(true);
+        b.setCategory(Notification.CATEGORY_STATUS);
+        b.setPriority(Notification.PRIORITY_LOW);
+        b.setDefaults(0);   // 不响铃不震动
+        NotificationManager nm =
+                (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null) return;
+        nm.notify(ID_LOG, b.build());
     }
 
     public static void cancel(Context c, int id) {
