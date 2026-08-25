@@ -72,8 +72,13 @@ public class MainActivity extends Activity {
     private static final int REQ_LOC = 100;
     private static final int REQ_NOTIF = 101;
     private static final int REQ_EXPORT_LOG = 102;   // v9.87-fix：SAF 导出诊断日志
+    private static final int REQ_M3_BG = 103;         // v9.102.1：Material 自定义背景壁纸
+    private static final int REQ_CROP = 104;             // v9.104：壁纸系统裁剪
     /** v9.73：权限引导弹窗引用与状态行（授权返回后 onResume 实时刷新） */
     private Dialog permGuide;
+    private Dialog settingsDlg = null;     // v9.102.4：设置面板引用（壁纸选图后刷新状态）
+    private boolean m3BgActive = false;    // v9.102.4：壁纸当前是否生效
+    private boolean m3BgLight = false;     // v9.102.4：壁纸蒙版后有效亮度（true=亮→深色文字）
     private TextView[] permStates;
     /** v9.16：前台自动刷新间隔 120 秒（原 30 秒，省电） */
     private static final long REFRESH_MS = 120_000;
@@ -88,6 +93,12 @@ public class MainActivity extends Activity {
     private LinearLayout detailRow;   // v9.22：实时详情卡（湿度/风/云量/UV）
     private View rootFrame;
     private TextView cityText, tempText, descText, feelsText, sunTimeText, sourceText;
+    private static int lastWeatherCode = 0;     // v9.101.1：最近天气码（就地切换重建色板）
+    private static int lastWeatherHour = 12;    // v9.101.3：最近小时（渐变 paletteHour 重建用）
+    private static boolean detailReady = false; // v9.101.1：详情数据是否已就绪
+    private static int lastHum = -1, lastCloud = -1;
+    private static double lastWind = -1, lastWindDir = -1, lastUv = -1, lastFeels = -100;
+    private static String lastSr = null, lastSs = null;
     private static double[] uvDay = null;      // v9.67：今日逐小时 UV（从当前小时起 24 个点）
     private static int[] uvDayHour = null;     // 对应的小时数（0-23）
     private static UvDayView activeUvDay = null;  // v9.68：UV 弹窗内走势图（后台刷新完成后更新）
@@ -108,6 +119,12 @@ public class MainActivity extends Activity {
     private String locChoice = "auto";   // v9.46/47：定位方式 "auto"/"gps"/"ip"（auto=GPS 可用优先，否则 IP）
     private boolean settingsInDetail = false;   // v9.89：设置是否处于二级页（返回键回一级）
     private boolean settingsAnimating = false;  // v9.87.2：设置页切换动画防抖
+    private static android.graphics.RectF clickRevealRect = null; // v9.95：最近点击行矩形（窗口坐标），供方框展开定位
+    private static android.graphics.RectF themeRevealRect = null; // v9.95：recreate 后方框展开矩形（contentRoot 局部，static 跨进程传递）
+    private static android.graphics.RectF lastDetailRevealRect = null; // v9.96：二级页进入时的起点矩形，返回时收缩回该处
+
+    private boolean materialHome = false;    // v9.93：主界面 Material You 极简风格开关
+    private TextView bigIconTv;              // v9.93：极简风格大天气图案（图标字体）
     private boolean lastLocModeIp = false;   // v9.47：最近一次定位是否 IP（GPS 监控自动切换判断用）
     private long lastGpsAutoTs = 0;   // v9.47：GPS 自动切换节流（60s）
     private LocationManager gpsMgr = null;      // v9.47：GPS 实时监控
@@ -143,7 +160,7 @@ public class MainActivity extends Activity {
         }
     };
 
-    private static boolean reopenSettings = false;   // 主题切换 recreate 后自动重开设置面板
+    private static String reopenTarget = null;   // v9.95：recreate 后要自动进入的设置二级页（"appearance"）
     private boolean loading = false;
     private int loadGen = 0;   // v9.45：加载代际——新请求立即开始并作废旧线程结果（根治 loading 阻塞）
     private boolean rendered = false;
@@ -226,6 +243,64 @@ public class MainActivity extends Activity {
 
         contentRoot = findViewById(R.id.contentRoot);
         applyThemeToTree(findViewById(android.R.id.content));
+        // v9.95：主题/风格切换——从点击处方框展开到全屏（720ms FastOutSlowIn），结束后自动重开设置面板二级页
+        if (themeRevealRect != null) {
+            final android.graphics.RectF sr = themeRevealRect;
+            themeRevealRect = null;
+            // v9.97：首帧渲染前即设置好小方块 clip + 半透明——避免首帧先显示完整界面再"闪"成小方块（表现为切换卡一下）
+            final float scx = (sr.left + sr.right) / 2f, scy = (sr.top + sr.bottom) / 2f;
+            final float ss = dp(64);
+            final android.graphics.RectF start = new android.graphics.RectF(
+                    scx - ss / 2, scy - ss / 2, scx + ss / 2, scy + ss / 2);
+            final android.graphics.RectF cur = new android.graphics.RectF(start);
+            final android.graphics.RectF end = new android.graphics.RectF();
+            contentRoot.setClipToOutline(true);
+            contentRoot.setOutlineProvider(new android.view.ViewOutlineProvider() {
+                @Override public void getOutline(android.view.View view, android.graphics.Outline outline) {
+                    int l = Math.max(0, (int) cur.left), t = Math.max(0, (int) cur.top);
+                    int r = Math.min(view.getWidth(), (int) cur.right);
+                    int b = Math.min(view.getHeight(), (int) cur.bottom);
+                    if (r > l && b > t) outline.setRect(l, t, r, b);
+                }
+            });
+            contentRoot.setAlpha(0.3f);
+            contentRoot.post(new Runnable() {
+                @Override public void run() {
+                    if (contentRoot == null || contentRoot.getWidth() <= 0) {
+                        contentRoot.setClipToOutline(false);
+                        contentRoot.setOutlineProvider(null);
+                        contentRoot.setAlpha(1f);
+                        maybeReopenDetail();
+                        return;
+                    }
+                    end.set(0, 0, contentRoot.getWidth(), contentRoot.getHeight());
+                    android.animation.ValueAnimator va = android.animation.ValueAnimator.ofFloat(0f, 1f);
+                    va.setDuration(720);
+                    va.setInterpolator(fastOutSlowIn());
+                    va.addUpdateListener(new android.animation.ValueAnimator.AnimatorUpdateListener() {
+                        @Override public void onAnimationUpdate(android.animation.ValueAnimator a) {
+                            float t = a.getAnimatedFraction();
+                            cur.left = start.left + (end.left - start.left) * t;
+                            cur.top = start.top + (end.top - start.top) * t;
+                            cur.right = start.right + (end.right - start.right) * t;
+                            cur.bottom = start.bottom + (end.bottom - start.bottom) * t;
+                            contentRoot.invalidateOutline();
+                        }
+                    });
+                    va.addListener(new android.animation.AnimatorListenerAdapter() {
+                        @Override public void onAnimationEnd(android.animation.Animator a) {
+                            contentRoot.setClipToOutline(false);
+                            contentRoot.setOutlineProvider(null);
+                            contentRoot.setAlpha(1f);
+                            maybeReopenDetail();
+                        }
+                    });
+                    va.start();
+                }
+            });
+        } else {
+            maybeReopenDetail();
+        }
         hourlyRow = findViewById(R.id.hourlyRow);
         dailyList = findViewById(R.id.dailyList);
         detailRow = findViewById(R.id.detailRow);
@@ -289,6 +364,16 @@ public class MainActivity extends Activity {
         // Material Icons 图标字体（云图 / 通知入口）
         mapIcon.setTypeface(Fonts.icons());
         reportIcon.setTypeface(Fonts.icons());
+        // v9.93：Material You 极简风格——大天气图案（图标字体），插在温度上方
+        bigIconTv = new TextView(this);
+        bigIconTv.setTextSize(64);
+        bigIconTv.setTypeface(Fonts.icons());
+        bigIconTv.setGravity(Gravity.CENTER_HORIZONTAL);
+        // v9.101：大天气图案插在温度之后、描述之前（大字温度保持最上方居中）
+        int iconIdx = contentRoot.indexOfChild(tempText) + 1;
+        contentRoot.addView(bigIconTv, iconIdx < 0 ? 1 : iconIdx,
+                new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT));
         mapIcon.setText("\uE798");     // water_drop 降雨
         reportIcon.setText("\uE8B5");  // schedule
         weatherBg.setWeather(0, false);
@@ -325,11 +410,15 @@ public class MainActivity extends Activity {
         refreshReportCard();
 
         rootFrame = findViewById(R.id.rootFrame);
-        int[] initPal = Theme.paletteHour(this, 0,
+        materialHome = "material".equals(homeStyle());   // v9.93：主界面风格
+        int[] initPal = homePalette(0,
                 Calendar.getInstance().get(Calendar.HOUR_OF_DAY));
+        bgColors = initPal;   // v9.101.3：首屏即同步渐变底色状态
         setGradient(initPal);
-        weatherBg.setLightPalette(bgBrightness(initPal));
-        applyTopColors(bgBrightness(initPal));
+        applyHomeStyle();   // v9.93：极简风格——关闭粒子动画、内容居中、显示大图案
+        boolean initLight = effectiveBgLight(bgBrightness(initPal));   // v9.102.4：壁纸模式按壁纸亮度
+        weatherBg.setLightPalette(initLight);
+        applyTopColors(initLight);
 
         // v9.8 全面屏适配：沉浸式状态栏 + 刘海模式 + 安全区 inset 补偿
         if (Build.VERSION.SDK_INT >= 21) {
@@ -485,10 +574,7 @@ public class MainActivity extends Activity {
         foreground = true;
         startGpsWatch();   // v9.47：自动模式下实时监听 GPS，可用即优先切换
         if (netWatcher != null) netWatcher.start();   // v9.49：断网监控
-        if (reopenSettings) {
-            reopenSettings = false;
-            showSettingsDialog();       // 主题切换后自动重开，选中态保持
-        }
+        // v9.95：主题/风格切换后的重开由 recreate 后的方框展开动画回调接管（maybeReopenDetail）
         refreshPermStates();   // v9.73：从系统设置页/授权弹窗返回后，实时刷新权限引导状态
         autoRefresh.removeCallbacks(refreshTask);
         autoRefresh.postDelayed(refreshTask, REFRESH_MS);
@@ -527,7 +613,42 @@ public class MainActivity extends Activity {
     @Override
     public void onActivityResult(int code, int result, Intent data) {
         super.onActivityResult(code, result, data);
-        if (code == REQ_EXPORT_LOG && result == RESULT_OK && data != null && data.getData() != null) {
+        if (code == REQ_M3_BG && result == RESULT_OK && data != null && data.getData() != null) {
+            // v9.102.1：Material 壁纸——SAF 选取后复制到内部存储（持久化，权限无关）
+            try {
+                android.net.Uri uri = data.getData();
+                try {
+                    getContentResolver().takePersistableUriPermission(
+                            uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                } catch (Throwable ignored) { }
+                java.io.File f = new java.io.File(getFilesDir(), "m3_bg.jpg");
+                java.io.InputStream in = getContentResolver().openInputStream(uri);
+                java.io.OutputStream out = new java.io.FileOutputStream(f);
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                out.close();
+                in.close();
+                Theme.setM3BgPath(this, f.getAbsolutePath());
+                applyUiInPlace();   // 立即应用到主界面
+                // v9.102.4：面板若还开着，就地重建刷新"已设置"状态
+                if (settingsDlg != null) showSettingsDialog("appearance", settingsDlg);
+                Toast.makeText(this, "壁纸已应用", Toast.LENGTH_SHORT).show();
+                // v9.104.2：启动自绘裁剪界面（单指拖动/双指缩放/旋转，确认后写回壁纸）
+                startActivityForResult(new Intent(this, CropActivity.class), REQ_CROP);
+            } catch (Exception e) {
+                Toast.makeText(this, "壁纸设置失败：" + e.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        } else if (code == REQ_CROP) {
+            // v9.104.2：自绘裁剪返回——成功则裁剪结果已写回 m3_bg.jpg，直接刷新应用
+            if (result == RESULT_OK) {
+                applyUiInPlace();   // 立即应用裁剪结果
+                if (settingsDlg != null) showSettingsDialog("appearance", settingsDlg);
+                Toast.makeText(this, "壁纸已裁剪并应用", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "已取消裁剪，使用原图", Toast.LENGTH_SHORT).show();
+            }
+        } else if (code == REQ_EXPORT_LOG && result == RESULT_OK && data != null && data.getData() != null) {
             // v9.87-fix：SAF 导出日志回调——写入用户选定位置
             boolean ok = LogFile.exportTo(this, data.getData());
             Toast.makeText(this,
@@ -2532,12 +2653,15 @@ public class MainActivity extends Activity {
                 hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
             }
 
-            int[] pal = Theme.paletteHour(this, code, hour);
+            int[] pal = homePalette(code, hour);   // v9.93：极简风格用 Material 柔和色板
+            lastWeatherCode = code;   // v9.101.1：就地切换重建色板用
+            lastWeatherHour = hour;   // v9.101.3：渐变背景按城市时区小时重建
             animateBg(pal);
             getWindow().setStatusBarColor(0x00000000);
             getWindow().setNavigationBarColor(0x00000000);
+            boolean refreshLight = effectiveBgLight(bgBrightness(pal));
             getWindow().getDecorView()
-                    .setSystemUiVisibility(Theme.statusBarLightFlag(this)
+                    .setSystemUiVisibility((refreshLight ? View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR : 0)   // v9.103.1：状态栏随莫奈背景亮度
                             | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                             | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                             | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
@@ -2556,14 +2680,16 @@ public class MainActivity extends Activity {
             }
 
             animateTemp(t);
+            if (bigIconTv != null) bigIconTv.setText(WeatherApi.icon(code, day));   // v9.93：大天气图案
             descText.setText(Fonts.mixIcon(WeatherApi.icon(code, day), WeatherApi.text(code)));
-            boolean bgLight = bgBrightness(pal);
+            boolean bgLight = effectiveBgLight(bgBrightness(pal));   // v9.102.4：壁纸模式按壁纸亮度
             weatherBg.setLightPalette(bgLight);
             weatherBg.setWeather(code, day);
             applyTopColors(bgLight);
             applyCardTexts(pal);
-            // v9.56：三组件创建时直接按卡片背景取自适应字色组
-            int[] cols = Theme.cardTextColors(pal[1]);
+            styleCards();   // v9.94：渲染后同步卡片容器样式
+            // v9.56：三组件创建时直接按卡片背景取自适应字色组（v9.102.4：壁纸模式按壁纸亮度）
+            int[] cols = cardCols(pal);
 
             // 日出日落
             JSONObject daily = json.getJSONObject("daily");
@@ -2580,11 +2706,11 @@ public class MainActivity extends Activity {
             } catch (Exception ignored) { }
             feelsText.setText(feelsStr);
 
-            // 实时详情卡：湿度 / 风速 / 云量 / UV
-            fillDetail(hum, wind, windDir, cur.optInt("cloud_cover", -1),
-                    cur.optDouble("uv_index", -1), cols);
             String sr = WeatherApi.hhmm(daily.getJSONArray("sunrise").getString(0));
             String ss = WeatherApi.hhmm(daily.getJSONArray("sunset").getString(0));
+            // 实时详情卡：湿度 / 风速 / 云量 / UV（v9.101：Material 模式为 2 列小方块网格）
+            fillDetail(hum, wind, windDir, cur.optInt("cloud_cover", -1),
+                    cur.optDouble("uv_index", -1), feels, sr, ss, cols);
             sunTimeText.setText("日出 " + sr + " · 日落 " + ss);
             // v9.87：日出日落弧线按卡片背景明暗自适应配色，太阳按背景亮度微调
             sunArc.setColors(cols[1],
@@ -2632,9 +2758,32 @@ public class MainActivity extends Activity {
     /** v9.58：四列可点击弹出二级菜单；UV 弹窗参考 UVlens 展示晒伤时间与损害程度 */
     /** v9.59：湿度/云量改为分档色条弹窗，风速新增实时风向标，各档位配建议 */
     private void fillDetail(int hum, double wind, double windDir, int cloud, double uv,
-                            int[] cols) {
+                            double feels, String sr, String ss, int[] cols) {
+        if (detailRow == null) return;
+        // v9.101.1：缓存详情数据，供就地切换 UI 风格时立即重建布局
+        lastHum = hum; lastWind = wind; lastWindDir = windDir;
+        lastCloud = cloud; lastUv = uv; lastFeels = feels;
+        lastSr = sr; lastSs = ss; detailReady = true;
+        detailRow.removeAllViews();
+        if (materialHome) {
+            fillDetailTiles(hum, wind, windDir, cloud, uv, feels, sr, ss, cols);
+        } else {
+            // v9.103.3：极简方块清空过容器背景，切回渐变时补回（已有毛玻璃则不覆盖）
+            if (detailRow.getBackground() == null) {
+                detailRow.setBackgroundResource(R.drawable.bg_card);
+            }
+            fillDetailRow(hum, wind, windDir, cloud, uv, cols);
+        }
+        Fonts.apply(detailRow);   // v9.57：强制 Google Sans（中文自动回退系统字体）
+    }
+
+    /** v9.22：实时详情卡——4 列（湿度/风速/云量/UV），Material 图标 + 主次文字 */
+    private void fillDetailRow(int hum, double wind, double windDir, int cloud, double uv,
+                               int[] cols) {
         if (detailRow == null) return;
         detailRow.removeAllViews();
+        detailRow.setOrientation(LinearLayout.HORIZONTAL);
+        detailRow.setPadding(dp(6), dp(12), dp(6), dp(12));
         String[] labels = {"湿度", "风速", "云量", "UV 指数"};
         // v9.24：风速图标纠正——\uE3B9 实际是 send（纸飞机），air（三波浪线）
         // 的正确码位是 \uE3BA（官方 Material Icons），这才符合 Google UI 标准。
@@ -2720,7 +2869,119 @@ public class MainActivity extends Activity {
             col.addView(lbl);
             detailRow.addView(col);
         }
-        Fonts.apply(detailRow);   // v9.57：强制 Google Sans（中文自动回退系统字体）
+    }
+
+    /** v9.101：Material 模式——2 列小方块网格（体感/湿度/风速/云量/UV/日出日落），Pixel 信息卡风格 */
+    private void fillDetailTiles(int hum, double wind, double windDir, int cloud, double uv,
+                                 double feels, String sr, String ss, int[] cols) {
+        if (detailRow == null) return;
+        detailRow.removeAllViews();
+        detailRow.setOrientation(LinearLayout.VERTICAL);
+        detailRow.setPadding(0, 0, 0, 0);
+        detailRow.setBackground(null);   // 方块各自成卡，容器透明留缝
+        final boolean dark = Theme.isDark(this);
+        int tileBg = 0x1FFFFFFF;        // v9.103.1：极简模式方块统一半透明（12% 白）
+        int tilePressed = 0x2EFFFFFF;
+        // v9.102.2：仅湿度/风速/云量/UV 四个方块（体感与日出日落已移至顶部文字，删除异常方块）
+        String[] labels = {"湿度", "风速", "云量", "UV 指数"};
+        String[] icons = {"\uE798", "\uE3BA", "\uE2BD", "\uE430"};
+        String[] vals = {
+                hum >= 0 ? hum + "%" : "--",
+                wind >= 0 ? Math.round(wind) + " km/h" : "--",
+                cloud >= 0 ? cloud + "%" : "--",
+                uv >= 0 ? String.format(Locale.US, "%.1f", uv) : "--"
+        };
+        final int fHum = hum;
+        final double fWind = wind;
+        final double fWindDir = windDir;
+        final int fCloud = cloud;
+        final double fUv = uv;
+        for (int r = 0; r < 2; r++) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            if (r > 0) rlp.topMargin = dp(10);
+            row.setLayoutParams(rlp);
+            for (int c = 0; c < 2; c++) {
+                final int i = r * 2 + c;
+                LinearLayout tile = new LinearLayout(this);
+                tile.setOrientation(LinearLayout.VERTICAL);
+                tile.setGravity(Gravity.CENTER);
+                LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, dp(104), 1f);
+                if (c == 0) tlp.rightMargin = dp(5);
+                else tlp.leftMargin = dp(5);
+                tile.setLayoutParams(tlp);
+
+                // v9.58：按压反馈 + 二级菜单（湿度/风/云/UV 可点弹窗；体感/日出日落仅展示）
+                android.graphics.drawable.StateListDrawable sld =
+                        new android.graphics.drawable.StateListDrawable();
+                android.graphics.drawable.GradientDrawable pressedBg =
+                        new android.graphics.drawable.GradientDrawable();
+                pressedBg.setColor(tilePressed);
+                pressedBg.setCornerRadius(dp(22));
+                android.graphics.drawable.GradientDrawable normalBg =
+                        new android.graphics.drawable.GradientDrawable();
+                normalBg.setColor(tileBg);
+                normalBg.setCornerRadius(dp(22));
+                sld.addState(new int[]{android.R.attr.state_pressed}, pressedBg);
+                sld.addState(new int[]{}, normalBg);
+                tile.setBackground(sld);
+                final boolean clickable = true;   // v9.102.2：湿度/风速/云量/UV 均可点击弹窗
+                tile.setClickable(clickable);
+                tile.setFocusable(clickable);
+
+                TextView ic = new TextView(this);
+                ic.setText(icons[i]);
+                ic.setTextColor(cols[2]);
+                ic.setTextSize(20);
+                ic.setGravity(Gravity.CENTER);
+                ic.setTypeface(Fonts.icons());
+
+                TextView val = new TextView(this);
+                val.setText(vals[i]);
+                val.setTextColor(cols[0]);
+                val.setTextSize(16);
+                val.setTypeface(Fonts.medium());
+                val.setGravity(Gravity.CENTER);
+                val.setPadding(0, dp(6), 0, 0);
+                val.setSingleLine(true);
+                val.setEllipsize(android.text.TextUtils.TruncateAt.END);
+
+                TextView lbl = new TextView(this);
+                lbl.setText(labels[i]);
+                lbl.setTextColor(cols[1]);
+                lbl.setTextSize(11);
+                lbl.setGravity(Gravity.CENTER);
+                lbl.setSingleLine(true);
+                lbl.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                lbl.setPadding(0, dp(2), 0, 0);
+
+                if (clickable) {
+                    final int idx = i;
+                    tile.setOnClickListener(new View.OnClickListener() {
+                        @Override
+                        public void onClick(View v) {
+                            if (idx == 0 && fHum >= 0) {
+                                showHumDialog(fHum);
+                            } else if (idx == 1 && fWind >= 0) {
+                                showWindDialog(fWind, fWindDir);
+                            } else if (idx == 2 && fCloud >= 0) {
+                                showCloudDialog(fCloud);
+                            } else if (idx == 3 && fUv >= 0) {
+                                showUvDialog(fUv);
+                            }
+                        }
+                    });
+                }
+
+                tile.addView(ic);
+                tile.addView(val);
+                tile.addView(lbl);
+                row.addView(tile);
+            }
+            detailRow.addView(row);
+        }
     }
 
     // ============ v9.58：详情卡二级菜单 ============
@@ -3433,6 +3694,10 @@ public class MainActivity extends Activity {
 
     /** 背景渐变色平滑过渡 */
     private void animateBg(final int[] to) {
+        if (materialHome) {   // v9.101.3：Material 模式纯色即时切换，不写 bgColors（避免污染渐变状态）
+            setGradient(to);
+            return;
+        }
         if (Arrays.equals(bgColors, to)) return;
         final int[] from = bgColors;
         bgColors = to;
@@ -3468,9 +3733,163 @@ public class MainActivity extends Activity {
                 .setStartDelay(delay).setInterpolator(new DecelerateInterpolator()).start();
     }
 
+    /** v9.102.1：按目标尺寸采样解码图片，防止大图 OOM */
+    private android.graphics.Bitmap decodeSampled(String path, int reqW, int reqH) {
+        try {
+            android.graphics.BitmapFactory.Options o = new android.graphics.BitmapFactory.Options();
+            o.inJustDecodeBounds = true;
+            android.graphics.BitmapFactory.decodeFile(path, o);
+            int bs = 1;
+            while (o.outWidth / bs > reqW * 2 || o.outHeight / bs > reqH * 2) bs *= 2;
+            android.graphics.BitmapFactory.Options o2 = new android.graphics.BitmapFactory.Options();
+            o2.inSampleSize = bs;
+            return android.graphics.BitmapFactory.decodeFile(path, o2);
+        } catch (Throwable ignored) { return null; }
+    }
+
     private void setGradient(int[] colors) {
+        if (materialHome) {   // v9.102.1：Material 模式——自定义壁纸优先，无壁纸纯色
+            String bg = Theme.m3BgPath(this);
+            if (bg != null && new java.io.File(bg).exists()) {
+                android.graphics.Bitmap bm = decodeSampled(bg,
+                        getResources().getDisplayMetrics().widthPixels,
+                        getResources().getDisplayMetrics().heightPixels);
+                if (bm != null) {
+                    m3BgActive = true;
+                    m3BgLight = false;   // v9.102.5：统一深色蒙版 + 浅色字体，不再按亮度翻转
+                    // 居中裁剪到屏幕比例（等效 CENTER_CROP），再由 BitmapDrawable 铺满
+                    int reqW2 = getResources().getDisplayMetrics().widthPixels;
+                    int reqH2 = getResources().getDisplayMetrics().heightPixels;
+                    float target = (float) reqW2 / reqH2;
+                    float srcR = (float) bm.getWidth() / bm.getHeight();
+                    try {
+                        if (srcR > target) {
+                            int nw = (int) (bm.getHeight() * target);
+                            bm = android.graphics.Bitmap.createBitmap(bm,
+                                    (bm.getWidth() - nw) / 2, 0, nw, bm.getHeight());
+                        } else {
+                            int nh = (int) (bm.getWidth() / target);
+                            bm = android.graphics.Bitmap.createBitmap(bm,
+                                    0, (bm.getHeight() - nh) / 2, bm.getWidth(), nh);
+                        }
+                    } catch (Throwable ignored) { }
+                    android.graphics.drawable.BitmapDrawable bd =
+                            new android.graphics.drawable.BitmapDrawable(getResources(), bm);
+                    bd.setFilterBitmap(true);
+                    bd.setAntiAlias(true);
+                    // v9.102.5：统一 60% 深色蒙版 + 浅色字体（任何壁纸下白字清晰）
+                    rootFrame.setBackground(new android.graphics.drawable.LayerDrawable(
+                            new android.graphics.drawable.Drawable[]{
+                                    bd, new android.graphics.drawable.ColorDrawable(0x99000000)}));
+                    return;
+                }
+            }
+            m3BgActive = false;
+            rootFrame.setBackgroundColor(colors[1]);
+            return;
+        }
         GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, colors);
         rootFrame.setBackground(bg);
+    }
+
+
+    /** v9.102.5：有效背景亮度——壁纸模式恒深（浅色字体），否则按色板 */
+    private boolean effectiveBgLight(boolean palLight) {
+        return m3BgActive ? false : palLight;
+    }
+
+    /** v9.102.4：卡片/方块文字色组——壁纸模式按壁纸亮度取深/浅字组 */
+    private int[] cardCols(int[] pal) {
+        if (m3BgActive) {
+            return Theme.cardTextColors(m3BgLight ? 0xFFF5F5F5 : 0xFF1A1A1A);
+        }
+        return Theme.cardTextColors(pal[1]);
+    }
+
+    // ---------- v9.93：Material You 极简主界面风格 ----------
+
+    /** 主界面风格偏好："gradient"=渐变动态（默认）/"material"=Material You 极简 */
+    private String homeStyle() {
+        return getSharedPreferences("ui_pref", MODE_PRIVATE).getString("home_style", "gradient");
+    }
+
+    /** 按当前风格取背景色板（极简风格用 Material 柔和色板，否则走时间/天气渐变） */
+    private int[] homePalette(int code, int hour) {
+        if (materialHome) return materialPalette(code);
+        return Theme.paletteHour(this, code, hour);
+    }
+
+    /** Material You 柔和色板（3 色同色系，浅/深各一套；晴/云/阴/雾/雨/雪/雷按天气取色） */
+    private int[] materialPalette(int code) {
+        // v9.103.2：取消莫奈取色，恢复固定深色外观（卡片半透明 + 白字不变）
+        switch (code) {
+            case 0: case 1:  // 晴
+                return new int[]{0xFF17263B, 0xFF1B2C45, 0xFF243A58};
+            case 2:          // 多云
+                return new int[]{0xFF1F2733, 0xFF222B39, 0xFF2A3444};
+            case 3:          // 阴
+                return new int[]{0xFF1C222C, 0xFF1F262F, 0xFF262E3A};
+            case 4:          // 雾
+                return new int[]{0xFF202226, 0xFF232629, 0xFF2A2D31};
+            case 5: case 6:  // 毛毛雨/小雨
+                return new int[]{0xFF1B2837, 0xFF1E2D3F, 0xFF263849};
+            case 7: case 8:  // 大雨/暴雨
+                return new int[]{0xFF182433, 0xFF1B2839, 0xFF223145};
+            case 9:          // 雪
+                return new int[]{0xFF1E2A35, 0xFF212E3A, 0xFF293845};
+            case 10: case 11: // 雷/冰雹
+                return new int[]{0xFF22233A, 0xFF252642, 0xFF2D2E50};
+            default:
+                return new int[]{0xFF1C222C, 0xFF1F262F, 0xFF262E3A};
+        }
+    }
+
+    /** 应用主界面风格：极简=关粒子动画、内容居中、显示大图案；渐变=恢复原样 */
+    private void applyHomeStyle() {
+        if (weatherBg != null) weatherBg.setVisibility(materialHome ? View.GONE : View.VISIBLE);
+        if (contentRoot != null) {
+            contentRoot.setGravity(materialHome ? Gravity.CENTER_HORIZONTAL : Gravity.NO_GRAVITY);
+        }
+        if (bigIconTv != null) bigIconTv.setVisibility(materialHome ? View.VISIBLE : View.GONE);
+        styleCards();   // v9.94：卡片容器样式跟随主界面风格
+    }
+
+    /** v9.97：主界面风格切换——就地切换，不 recreate、面板保持当前页 */
+    private void pickHomeStyle(String s, Dialog d) {
+        if (s.equals(homeStyle())) { d.dismiss(); return; }
+        getSharedPreferences("ui_pref", MODE_PRIVATE).edit().putString("home_style", s).apply();
+        applyUiInPlace();
+        showSettingsDialog("appearance", d);
+    }
+
+    /** v9.97：UI 主题/风格就地切换——主界面原地换色（文字/卡片/毛玻璃/粒子/系统栏同步） */
+    private void applyUiInPlace() {
+        materialHome = "material".equals(homeStyle());
+        applyThemeToTree(findViewById(android.R.id.content));
+        // v9.101.3：与天气刷新同一取色路径（Material 色板 / 渐变按城市小时），
+        // 渐变模式同步 bgColors，避免 Material 模式期间污染底色状态
+        int[] pal = homePalette(lastWeatherCode, lastWeatherHour);
+        if (!materialHome) bgColors = pal;
+        setGradient(pal);                    // v9.101.2：就地切换立即换背景（先刷新壁纸亮度状态）
+        boolean bgLight = effectiveBgLight(bgBrightness(pal));   // v9.102.4：壁纸模式按壁纸亮度
+        applyTopColors(bgLight);
+        applyCardTexts(pal);
+        applyHomeStyle();                    // 含 styleCards：极简换纯色卡片 / 渐变铺新快照
+        // v9.104.3：先恢复 weatherBg 可见再重建玻璃快照，否则 GONE 状态下快照尺寸为 0 导致玻璃缺失
+        if (!materialHome) refreshGlass();   // 渐变模式：重绘毛玻璃快照（高光/边框随新主题）
+        // v9.101.1：就地切换立即重建详情区（Material 方块网格 / 渐变 4 列），避免返回后才生效
+        if (detailReady) {
+            fillDetail(lastHum, lastWind, lastWindDir, lastCloud, lastUv,
+                    lastFeels, lastSr, lastSs, cardCols(pal));
+        }
+        weatherBg.setLightPalette(bgLight);
+        if (Build.VERSION.SDK_INT >= 21) {
+            getWindow().getDecorView().setSystemUiVisibility(
+                    (bgLight ? View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR : 0)   // v9.103.1：状态栏随莫奈背景亮度
+                    | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+        }
     }
 
         // ---------- 毛玻璃 ----------
@@ -3479,6 +3898,10 @@ public class MainActivity extends Activity {
     private void refreshGlass() {
         try {
             int vw = weatherBg.getWidth(), vh = weatherBg.getHeight();
+            if (vw <= 0 || vh <= 0) {   // v9.104.3：weatherBg GONE（极简刚切回）时用根视图尺寸兜底
+                vw = rootFrame.getWidth();
+                vh = rootFrame.getHeight();
+            }
             if (vw <= 0 || vh <= 0) return;
             int sw = Math.max(vw / 4, 1), sh = Math.max(vh / 4, 1);
             Bitmap small = Bitmap.createBitmap(sw, sh, Bitmap.Config.ARGB_8888);
@@ -3656,10 +4079,39 @@ public class MainActivity extends Activity {
     /** 外观设置弹窗（Bottom Sheet）：主题选择（跟随系统 / 深色 / 浅色），选中即生效 */
     /** v9.87：设置面板 —— 横向分页（外观 / 定位与后台 / 天气源）+ 防误触 + 自定义天气源 */
     /** v9.87.3：设置改为系统悬浮窗（SYSTEM_ALERT_WINDOW），可拖动、贴底半屏、进出场动效保留 */
-    private void showSettingsDialog() {
-        final Dialog d = new Dialog(this);
-        d.requestWindowFeature(Window.FEATURE_NO_TITLE);
+    private void showSettingsDialog() { showSettingsDialog(null); }
+
+    /** v9.95：openDetail 非空时，面板打开后自动进入对应二级页（如 "appearance"） */
+    private void showSettingsDialog(final String openDetail) { showSettingsDialog(openDetail, null); }
+
+    /** v9.97：reuse 非空时复用已有 Dialog 就地重建面板——UI 主题/风格切换不关闭面板、不返回主界面 */
+    private void showSettingsDialog(final String openDetail, final Dialog reuse) {
+        // v9.94：非浮动窗口主题——浮动窗口不绘制状态栏区域，导致顶部一直透出主界面
         final boolean dark = Theme.isDark(this);
+        final Dialog d = reuse != null ? reuse : new Dialog(this,
+                dark ? R.style.SettingsSheetTheme : R.style.SettingsSheetThemeLight);
+        // v9.102.4：记录面板引用（壁纸选图返回后刷新状态），关闭时清空
+        settingsDlg = d;
+        d.setOnDismissListener(new DialogInterface.OnDismissListener() {
+            @Override public void onDismiss(DialogInterface di) {
+                if (settingsDlg == d) settingsDlg = null;
+            }
+        });
+        // v9.99：requestFeature 只能在首次添加 content 前调用——复用已 show 的 Dialog 时跳过，否则崩溃
+        if (reuse == null) d.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        // v9.99.1：平滑换色——复用面板前先抓旧画面快照，替换后淡出露出新面板
+        final android.graphics.Bitmap[] fadeBmp = new android.graphics.Bitmap[1];
+        if (reuse != null && d.getWindow() != null) {
+            try {
+                View oldDecor = d.getWindow().getDecorView();
+                if (oldDecor.getWidth() > 0 && oldDecor.getHeight() > 0) {
+                    fadeBmp[0] = android.graphics.Bitmap.createBitmap(
+                            oldDecor.getWidth(), oldDecor.getHeight(),
+                            android.graphics.Bitmap.Config.ARGB_8888);
+                    oldDecor.draw(new android.graphics.Canvas(fadeBmp[0]));
+                }
+            } catch (Throwable ignored) { }
+        }
         final int bg = Theme.setBg(this);
 
         LinearLayout root = new LinearLayout(this);
@@ -3705,39 +4157,45 @@ public class MainActivity extends Activity {
         header.addView(done);
         listPage.addView(header);
 
-        stEntry(listPage, "外观", "深色 / 浅色 / 跟随系统", themeLabel(), dark, new Runnable() {
+        LinearLayout homeCard = stCard(dark);
+        stEntry(homeCard, R.drawable.ic_set_palette, "外观", "深色 / 浅色 / 跟随系统", themeLabel(), dark, new Runnable() {
             @Override public void run() {
                 openSettingsDetail(dark, listPage, detailPage, "外观",
                         buildAppearancePage(dark, d, null));
             }
         });
-        stEntry(listPage, "定位与后台", "定位方式 · 后台预警 · 常驻", locLabel(), dark, new Runnable() {
+        homeCard.addView(stDivider(dark));
+        stEntry(homeCard, R.drawable.ic_set_location, "定位与后台", "定位方式 · 后台预警 · 常驻", locLabel(), dark, new Runnable() {
             @Override public void run() {
                 openSettingsDetail(dark, listPage, detailPage, "定位与后台",
                         buildLocBgPage(dark, d, null));
             }
         });
-        stEntry(listPage, "天气源", "数据来源 · 可切换国内主流 API",
+        homeCard.addView(stDivider(dark));
+        stEntry(homeCard, R.drawable.ic_set_cloud, "天气源", "数据来源 · 可切换国内主流 API",
                 WeatherSources.label(this), dark, new Runnable() {
                     @Override public void run() {
                         openSettingsDetail(dark, listPage, detailPage, "天气源",
                                 buildSourcePage(dark, d, null));
                     }
                 });
-        stEntry(listPage, "自定义提醒", "温度 · 湿度 · 紫外线超阈值提醒",
+        homeCard.addView(stDivider(dark));
+        stEntry(homeCard, R.drawable.ic_set_warning, "自定义提醒", "温度 · 湿度 · 紫外线超阈值提醒",
                 customAlertLabel(), dark, new Runnable() {
                     @Override public void run() {
                         openSettingsDetail(dark, listPage, detailPage, "自定义提醒",
                                 buildCustomAlertPage(dark, d, null));
                     }
                 });
+        homeCard.addView(stDivider(dark));
         // v9.90：诊断日志独立栏目（写入开关 · 大小上限 · 导出）
-        stEntry(listPage, "诊断日志", "写入开关 · 大小上限 · 导出", logLabel(), dark, new Runnable() {
+        stEntry(homeCard, R.drawable.ic_set_log, "诊断日志", "写入开关 · 大小上限 · 导出", logLabel(), dark, new Runnable() {
             @Override public void run() {
                 openSettingsDetail(dark, listPage, detailPage, "诊断日志",
                         buildLogPage(dark, d, null));
             }
         });
+        listPage.addView(homeCard);
 
         root.addView(listPage);
         root.addView(detailPage);
@@ -3752,7 +4210,8 @@ public class MainActivity extends Activity {
 
         if (d.getWindow() != null) {
             Window w = d.getWindow();
-            w.setBackgroundDrawable(new ColorDrawable(0x00000000));
+            // v9.93：窗口背景直接铺主题底色——状态栏/手势条区域随窗口内容延伸，不再透出主界面
+            w.setBackgroundDrawable(new ColorDrawable(bg));
             w.setDimAmount(0f);                         // 全屏面板，无需压暗主界面
             w.setWindowAnimations(R.style.SettingsSheetAnim);   // 底部滑入/滑出动效
             w.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
@@ -3798,8 +4257,11 @@ public class MainActivity extends Activity {
                     bottom = insets.getSystemWindowInsetBottom();
                     top = insets.getSystemWindowInsetTop();
                 }
-                // v9.87.4：顶部避让状态栏、底部避让手势条/导航栏/键盘，其余铺主题底色
-                v.setPadding(dp(20), top + dp(14), dp(20), bottom + dp(18));
+                // v9.97：listPage/detailPage 全屏覆盖（含状态栏/手势条区域），方框展开才能铺满全屏；
+                // insets 避让改由两页各自 padding 承担，root 不再留边
+                int padL = dp(20), padT = top + dp(14), padR = dp(20), padB = bottom + dp(18);
+                listPage.setPadding(padL, padT, padR, padB);
+                detailPage.setPadding(padL, padT, padR, padB);
                 return insets;
             }
         });
@@ -3819,27 +4281,61 @@ public class MainActivity extends Activity {
             }
         });
 
-        d.show();
+        if (reuse == null) {
+            d.show();
+        } else {
+            // v9.99.1：平滑换色——旧面板快照淡出（300ms）露出新面板，新面板同步淡入
+            if (fadeBmp[0] != null && d.getWindow() != null) {
+                final android.widget.ImageView fv = new android.widget.ImageView(this);
+                fv.setImageBitmap(fadeBmp[0]);
+                fv.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                ((ViewGroup) d.getWindow().getDecorView()).addView(fv);
+                fv.animate().alpha(0f).setDuration(300)
+                        .setInterpolator(new android.view.animation.DecelerateInterpolator())
+                        .withEndAction(new Runnable() {
+                            @Override public void run() {
+                                ViewGroup p = (ViewGroup) fv.getParent();
+                                if (p != null) p.removeView(fv);
+                                if (fadeBmp[0] != null) { fadeBmp[0].recycle(); fadeBmp[0] = null; }
+                            }
+                        }).start();
+            }
+            root.setAlpha(0f);
+            root.animate().alpha(1f).setDuration(220).start();
+        }
+
+        // v9.95：主题/风格切换后重开面板——直接进入对应二级页（从点击处再次方框展开）
+        if (openDetail != null) {
+            final String od = openDetail;
+            root.post(new Runnable() {
+                @Override public void run() {
+                    if ("appearance".equals(od)) {
+                        openSettingsDetail(dark, listPage, detailPage, "外观",
+                                buildAppearancePage(dark, d, null), reuse == null);
+                    }
+                }
+            });
+        }
     }
 
     /** 一级列表入口行：标题 + 副标题 + 当前值 + 右箭头 */
-    private void stEntry(LinearLayout parent, String title, String sub, String value,
+    private void stEntry(LinearLayout parent, int iconRes, String title, String sub, String value,
                          boolean dark, final Runnable onClick) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        rlp.topMargin = dp(6);
         row.setLayoutParams(rlp);
-        row.setBackgroundResource(dark ? R.drawable.bg_opt_row : R.drawable.bg_opt_row_light);
-        row.setPadding(dp(14), dp(14), dp(14), dp(14));
-        // v9.87：按压波纹反馈
+        // v9.91（Miuix）：条目透明底放卡片内，保留按压波纹
+        row.setPadding(dp(8), dp(10), dp(8), dp(10));
         if (Build.VERSION.SDK_INT >= 23) {
             row.setForeground(new android.graphics.drawable.RippleDrawable(
                     android.content.res.ColorStateList.valueOf(
-                            dark ? 0x26FFFFFF : 0x1A000000), null, null));
+                            dark ? 0x1AFFFFFF : 0x14000000), null, null));
         }
+        if (iconRes != 0) row.addView(stIcon(iconRes, dark));
 
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
@@ -3886,7 +4382,14 @@ public class MainActivity extends Activity {
         row.addView(arrow);
 
         row.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { onClick.run(); }
+            @Override public void onClick(View v) {
+                // v9.95：记录点击行矩形（窗口坐标），二级页从此处方框展开
+                int[] loc = new int[2];
+                v.getLocationInWindow(loc);
+                clickRevealRect = new android.graphics.RectF(
+                        loc[0], loc[1], loc[0] + v.getWidth(), loc[1] + v.getHeight());
+                onClick.run();
+            }
         });
         parent.addView(row);
     }
@@ -3895,8 +4398,18 @@ public class MainActivity extends Activity {
     private void openSettingsDetail(final boolean dark, final LinearLayout listPage,
                                     final LinearLayout detailPage,
                                     final String title, final View content) {
+        openSettingsDetail(dark, listPage, detailPage, title, content, true);
+    }
+
+    /** v9.97：animate=false 时直接显示二级页（UI 就地切换重建面板用，不播进入动画） */
+    private void openSettingsDetail(final boolean dark, final LinearLayout listPage,
+                                    final LinearLayout detailPage,
+                                    final String title, final View content, final boolean animate) {
         detailPage.removeAllViews();
         settingsInDetail = true;
+        // v9.96：记录进入起点（当前点击矩形拷贝），返回收缩动画使用
+        lastDetailRevealRect = clickRevealRect != null
+                ? new android.graphics.RectF(clickRevealRect) : null;
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
@@ -3938,54 +4451,219 @@ public class MainActivity extends Activity {
         sc.addView(content);
         detailPage.addView(sc);
 
-        // v9.87.2：等 detailPage 完成首次布局再播放滑入动画，避免首帧空白闪烁
-        detailPage.post(new Runnable() {
-            @Override public void run() {
-                animatePageSwitch(listPage, detailPage, true, null);
-            }
-        });
+        if (animate) {
+            // v9.87.2：等 detailPage 完成首次布局再播放滑入动画，避免首帧空白闪烁
+            detailPage.post(new Runnable() {
+                @Override public void run() {
+                    animatePageSwitch(listPage, detailPage, true, null);
+                }
+            });
+        } else {
+            // v9.97：就地切换——不播进入动画，直接切到二级页
+            listPage.setVisibility(View.GONE);
+            detailPage.setVisibility(View.VISIBLE);
+        }
+    }
+
+    /** v9.92：Material fast_out_slow_in 缓动曲线（仿 NeriPlayer FastOutSlowInEasing） */
+    private static android.view.animation.Interpolator fastOutSlowIn() {
+        return new android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f);
+    }
+
+    /** v9.92：输入框条件显隐动画——淡入 + 上移 6dp（仿 NeriPlayer LazyAnimatedVisibility fadeIn+expandVertically） */
+    private void animateRevealView(final View v, final boolean show) {
+        v.animate().cancel();
+        if (show) {
+            v.setVisibility(View.VISIBLE);
+            v.setAlpha(0f);
+            v.setTranslationY(dp(6));
+            v.animate().alpha(1f).translationY(0f)
+                    .setDuration(220).setInterpolator(fastOutSlowIn()).start();
+        } else {
+            v.animate().alpha(0f).translationY(dp(6))
+                    .setDuration(160).setInterpolator(fastOutSlowIn())
+                    .withEndAction(new Runnable() {
+                        @Override public void run() {
+                            v.setVisibility(View.GONE);
+                            v.setAlpha(1f);
+                            v.setTranslationY(0f);
+                        }
+                    }).start();
+        }
+    }
+
+    /** v9.92：单选点选中动画——0.7 缩放回弹至 1.0（仿 M3 选中态） */
+    private void setRadioChecked(final View radio, final boolean checked) {
+        radio.setSelected(checked);
+        if (!checked) return;
+        radio.animate().cancel();
+        radio.setScaleX(0.7f);
+        radio.setScaleY(0.7f);
+        radio.animate().scaleX(1f).scaleY(1f)
+                .setDuration(240).setInterpolator(fastOutSlowIn()).start();
     }
 
     /** v9.87.2：设置一级/二级页切换动效——详情页右滑入/右滑出 + 淡入淡出，避免双页重叠闪烁 */
+    /** v9.92：升级为双阶段滑动过渡——旧页先滑出 14% 边距，新页再反向滑入（仿 NeriPlayer MainTabTransitionController） */
     private void animatePageSwitch(final LinearLayout listPage,
                                    final LinearLayout detailPage,
                                    final boolean forward, final Runnable onEnd) {
         if (settingsAnimating) return;   // 防抖：动画进行中忽略重复触发
         settingsAnimating = true;
         float w = getResources().getDisplayMetrics().widthPixels;
-        final float detFromX = forward ? w * 0.45f : 0f;
-        final float detToX = forward ? 0f : w * 0.45f;
-        final float detFromA = forward ? 0f : 1f;
-        final float detToA = forward ? 1f : 0f;
+        final float edge = w * 0.14f;   // NeriPlayer MAIN_TAB_EDGE_OFFSET_FRACTION
+        final int rootW = getResources().getDisplayMetrics().widthPixels;
+        final int rootH = getResources().getDisplayMetrics().heightPixels;
+        final android.view.animation.Interpolator ease = fastOutSlowIn();
 
-        listPage.setVisibility(View.GONE);
-        detailPage.setVisibility(View.VISIBLE);
-        detailPage.setTranslationX(detFromX);
-        detailPage.setAlpha(detFromA);
-
-        ValueAnimator anim = ValueAnimator.ofFloat(0f, 1f);
-        anim.setDuration(forward ? 280 : 220);
-        anim.setInterpolator(new DecelerateInterpolator());
-        anim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
-            @Override public void onAnimationUpdate(ValueAnimator va) {
-                float f = va.getAnimatedFraction();
-                detailPage.setTranslationX(detFromX + (detToX - detFromX) * f);
-                detailPage.setAlpha(detFromA + (detToA - detFromA) * f);
-            }
-        });
-        anim.addListener(new AnimatorListenerAdapter() {
-            @Override public void onAnimationEnd(Animator animation) {
+        final Runnable finish = new Runnable() {
+            @Override public void run() {
+                listPage.setTranslationX(0f);
+                listPage.setAlpha(1f);
                 detailPage.setTranslationX(0f);
                 detailPage.setAlpha(1f);
-                if (!forward) {
-                    detailPage.setVisibility(View.GONE);
-                    listPage.setVisibility(View.VISIBLE);
-                }
                 settingsAnimating = false;
                 if (onEnd != null) onEnd.run();
             }
+        };
+
+        if (forward) {
+            // v9.96：二级页进入——等布局完成后从点击处小方框展开到全屏 + 淡入
+            listPage.setVisibility(View.GONE);
+            detailPage.setVisibility(View.VISIBLE);
+            detailPage.setAlpha(1f);
+            detailPage.setTranslationX(0f);
+            final Runnable doReveal = new Runnable() {
+                @Override public void run() {
+                    final android.graphics.RectF end = new android.graphics.RectF(
+                            0, 0, detailPage.getWidth(), detailPage.getHeight());
+                    android.graphics.RectF start = null;
+                    if (clickRevealRect != null) {
+                        int[] dl = new int[2];
+                        detailPage.getLocationInWindow(dl);
+                        float cx = (clickRevealRect.left + clickRevealRect.right) / 2f - dl[0];
+                        float cy = (clickRevealRect.top + clickRevealRect.bottom) / 2f - dl[1];
+                        float s = dp(56);
+                        start = new android.graphics.RectF(cx - s / 2, cy - s / 2, cx + s / 2, cy + s / 2);
+                    }
+                    if (start == null) {
+                        start = new android.graphics.RectF(
+                                end.centerX() - dp(28), end.centerY() - dp(28),
+                                end.centerX() + dp(28), end.centerY() + dp(28));
+                    }
+                    detailPage.setAlpha(0.35f);
+                    detailPage.animate().alpha(1f).setDuration(380)
+                            .setInterpolator(fastOutSlowIn()).start();
+                    playRectReveal(detailPage, start, end, 380, fastOutSlowIn(), new Runnable() {
+                        @Override public void run() {
+                            detailPage.setAlpha(1f);
+                            finish.run();
+                        }
+                    });
+                }
+            };
+            if (detailPage.getWidth() <= 0 || detailPage.getHeight() <= 0) {
+                // 首次布局未完成（GONE→VISIBLE 首帧）：等布局完成再播放，避免尺寸为 0 动画异常
+                detailPage.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+                    @Override public void onLayoutChange(View v, int l, int t, int r, int b,
+                                                         int ol, int ot, int or, int ob) {
+                        detailPage.removeOnLayoutChangeListener(this);
+                        doReveal.run();
+                    }
+                });
+                detailPage.requestLayout();
+            } else {
+                doReveal.run();
+            }
+        } else {
+            // v9.96：关闭二级页——方框收缩回进入位置 + 一级页淡入
+            int dw = detailPage.getWidth(), dh = detailPage.getHeight();
+            if (dw <= 0 || dh <= 0) { dw = rootW; dh = rootH; }
+            android.graphics.RectF start = new android.graphics.RectF(0, 0, dw, dh);
+            android.graphics.RectF end = null;
+            if (lastDetailRevealRect != null) {
+                int[] dl = new int[2];
+                detailPage.getLocationInWindow(dl);
+                float cx = (lastDetailRevealRect.left + lastDetailRevealRect.right) / 2f - dl[0];
+                float cy = (lastDetailRevealRect.top + lastDetailRevealRect.bottom) / 2f - dl[1];
+                float s = dp(56);
+                end = new android.graphics.RectF(cx - s / 2, cy - s / 2, cx + s / 2, cy + s / 2);
+            }
+            if (end == null) {
+                end = new android.graphics.RectF(
+                        dw / 2f - dp(28), dh / 2f - dp(28), dw / 2f + dp(28), dh / 2f + dp(28));
+            }
+            // v9.99.1：收缩期间 listPage 保持 GONE——detailPage 留在全屏位置收缩，避免一级页挤占布局导致方框错位（上下颠倒）
+            detailPage.animate().alpha(0.55f).setDuration(300).setInterpolator(ease).start();
+            playRectReveal(detailPage, start, end, 320, ease, new Runnable() {
+                @Override public void run() {
+                    detailPage.setVisibility(View.GONE);
+                    detailPage.setAlpha(1f);
+                    // 收缩结束后一级页再淡入
+                    listPage.setVisibility(View.VISIBLE);
+                    listPage.setTranslationX(0f);
+                    listPage.setAlpha(0f);
+                    listPage.animate().alpha(1f).setDuration(300).setInterpolator(ease)
+                            .withEndAction(new Runnable() {
+                                @Override public void run() { finish.run(); }
+                            }).start();
+                }
+            });
+        }
+    }
+
+    /** v9.95：方框展开动画——内容从 start 矩形插值展开到 end 矩形（outline clip），替代圆形揭示 */
+    private static void playRectReveal(final android.view.View v,
+                                       final android.graphics.RectF start,
+                                       final android.graphics.RectF end,
+                                       long duration,
+                                       final android.view.animation.Interpolator interp,
+                                       final Runnable onEnd) {
+        if (v == null || start == null || end == null) {
+            if (onEnd != null) onEnd.run();
+            return;
+        }
+        final android.graphics.RectF cur = new android.graphics.RectF(start);
+        v.setClipToOutline(true);
+        v.setOutlineProvider(new android.view.ViewOutlineProvider() {
+            @Override public void getOutline(android.view.View view, android.graphics.Outline outline) {
+                // v9.96：矩形 clamp 到 View 范围内且保证有效，防止 0 尺寸/越界导致绘制异常
+                int l = Math.max(0, (int) cur.left), t = Math.max(0, (int) cur.top);
+                int r = Math.min(view.getWidth(), (int) cur.right);
+                int b = Math.min(view.getHeight(), (int) cur.bottom);
+                if (r > l && b > t) outline.setRect(l, t, r, b);
+            }
         });
-        anim.start();
+        android.animation.ValueAnimator va = android.animation.ValueAnimator.ofFloat(0f, 1f);
+        va.setDuration(duration);
+        if (interp != null) va.setInterpolator(interp);
+        va.addUpdateListener(new android.animation.ValueAnimator.AnimatorUpdateListener() {
+            @Override public void onAnimationUpdate(android.animation.ValueAnimator a) {
+                float t = a.getAnimatedFraction();
+                cur.left = start.left + (end.left - start.left) * t;
+                cur.top = start.top + (end.top - start.top) * t;
+                cur.right = start.right + (end.right - start.right) * t;
+                cur.bottom = start.bottom + (end.bottom - start.bottom) * t;
+                v.invalidateOutline();
+            }
+        });
+        va.addListener(new android.animation.AnimatorListenerAdapter() {
+            @Override public void onAnimationEnd(android.animation.Animator animation) {
+                v.setClipToOutline(false);
+                v.setOutlineProvider(null);
+                if (onEnd != null) onEnd.run();
+            }
+        });
+        va.start();
+    }
+
+    /** v9.95：方框展开动画结束后，若有待进入的设置二级页则自动重开面板并进入 */
+    private void maybeReopenDetail() {
+        if (reopenTarget != null) {
+            final String t = reopenTarget;
+            reopenTarget = null;
+            showSettingsDialog(t);
+        }
     }
 
     private String themeLabel() {
@@ -4025,6 +4703,46 @@ public class MainActivity extends Activity {
         OptionRow(LinearLayout r, View b) { row = r; radio = b; }
     }
 
+    /** Miuix 图标块：42dp 圆形底（primary 8%）+ 24dp 图标（primary 色） */
+    private ImageView stIcon(int resId, boolean dark) {
+        ImageView iv = new ImageView(this);
+        int tile = dp(42);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(tile, tile);
+        lp.rightMargin = dp(14);
+        iv.setLayoutParams(lp);
+        iv.setBackgroundResource(dark ? R.drawable.bg_icon_tile_dark : R.drawable.bg_icon_tile_light);
+        iv.setImageResource(resId);
+        iv.setColorFilter(Theme.setAccent(this));
+        int pad = dp(9);
+        iv.setPadding(pad, pad, pad, pad);
+        return iv;
+    }
+
+    /** Miuix 分组卡片：圆角 16dp、无阴影、柔和底色 */
+    private LinearLayout stCard(boolean dark) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackgroundResource(dark ? R.drawable.bg_setting_card_dark : R.drawable.bg_setting_card_light);
+        card.setPadding(dp(8), dp(4), dp(8), dp(4));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(12);
+        card.setLayoutParams(lp);
+        return card;
+    }
+
+    /** Miuix 卡片内条目分隔线（左右留白 16dp） */
+    private View stDivider(boolean dark) {
+        View v = new View(this);
+        v.setBackgroundResource(dark ? R.drawable.divider_setting_dark : R.drawable.divider_setting_light);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(1));
+        lp.leftMargin = dp(16);
+        lp.rightMargin = dp(16);
+        v.setLayoutParams(lp);
+        return v;
+    }
+
     private TextView stTitle(String text, float sp, boolean dark) {
         TextView tv = new TextView(this);
         tv.setText(text);
@@ -4035,26 +4753,35 @@ public class MainActivity extends Activity {
     }
 
     private void stSection(LinearLayout parent, String title, String sub, boolean dark) {
-        TextView t = stTitle(title, 18, dark);
+        int accent = Theme.setAccent(this);
+        TextView t = new TextView(this);
+        t.setText(title);
+        t.setTextSize(13);
+        t.setTypeface(t.getTypeface(), android.graphics.Typeface.BOLD);
+        t.setTextColor(accent);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.topMargin = dp(18);
+        lp.topMargin = dp(20);
+        lp.leftMargin = dp(8);
+        lp.rightMargin = dp(8);
         t.setLayoutParams(lp);
         parent.addView(t);
         if (sub != null) {
             TextView s = new TextView(this);
             s.setText(sub);
             s.setTextSize(12);
-            s.setTextColor(Theme.textSecondary(this));
+            s.setTextColor((accent & 0x00FFFFFF) | 0xC2000000);
             LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            slp.topMargin = dp(6);
+            slp.topMargin = dp(4);
+            slp.leftMargin = dp(8);
+            slp.rightMargin = dp(8);
             s.setLayoutParams(slp);
             parent.addView(s);
         }
     }
 
-    private OptionRow stOption(LinearLayout parent, String tag, String title, String sub,
+    private OptionRow stOption(LinearLayout parent, String tag, int iconRes, String title, String sub,
                                boolean dark, boolean checked, final SettingsPager pager,
                                final Runnable onPick) {
         final LinearLayout row = new LinearLayout(this);
@@ -4063,23 +4790,20 @@ public class MainActivity extends Activity {
         row.setTag(tag);
         LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        rlp.topMargin = dp(6);
         row.setLayoutParams(rlp);
-        row.setBackgroundResource(dark ? R.drawable.bg_opt_row : R.drawable.bg_opt_row_light);
-        row.setPadding(dp(14), dp(12), dp(14), dp(12));
+        row.setPadding(dp(8), dp(8), dp(8), dp(8));
         row.setSelected(checked);
-
-        View radio = new View(this);
-        radio.setLayoutParams(new LinearLayout.LayoutParams(dp(22), dp(22)));
-        radio.setBackgroundResource(dark ? R.drawable.bg_radio_selector : R.drawable.bg_radio_selector_light);
-        radio.setSelected(checked);
-        row.addView(radio);
+        if (Build.VERSION.SDK_INT >= 23) {
+            row.setForeground(new android.graphics.drawable.RippleDrawable(
+                    android.content.res.ColorStateList.valueOf(
+                            dark ? 0x1AFFFFFF : 0x14000000), null, null));
+        }
+        if (iconRes != 0) row.addView(stIcon(iconRes, dark));
 
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-        clp.leftMargin = dp(14);
         col.setLayoutParams(clp);
 
         TextView t = new TextView(this);
@@ -4101,9 +4825,23 @@ public class MainActivity extends Activity {
         }
         row.addView(col);
 
+        // v9.91（Miuix）：单选控件右置
+        View radio = new View(this);
+        radio.setBackgroundResource(dark ? R.drawable.bg_radio_selector : R.drawable.bg_radio_selector_light);
+        radio.setSelected(checked);
+        LinearLayout.LayoutParams rlp2 = new LinearLayout.LayoutParams(dp(24), dp(24));
+        rlp2.leftMargin = dp(10);
+        radio.setLayoutParams(rlp2);
+        row.addView(radio);
+
         row.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 if (pager != null && pager.isScrolling()) return;   // 防误触 3a
+                // v9.95：记录点击行矩形（窗口坐标），供主题切换/二级页方框展开定位
+                int[] loc = new int[2];
+                v.getLocationInWindow(loc);
+                clickRevealRect = new android.graphics.RectF(
+                        loc[0], loc[1], loc[0] + v.getWidth(), loc[1] + v.getHeight());
                 if (onPick != null) onPick.run();
             }
         });
@@ -4123,9 +4861,17 @@ public class MainActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         lp.topMargin = dp(10);
         btn.setLayoutParams(lp);
-        btn.setBackgroundResource(dark ? R.drawable.bg_opt_row : R.drawable.bg_opt_row_light);
-        btn.setSelected(highlight);
-        btn.setTextColor(Theme.setAccent(this));
+        int accent = Theme.setAccent(this);
+        btn.setTextColor(accent);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dp(16));
+        if (highlight) {
+            bg.setColor((accent & 0x00FFFFFF) | 0x1A000000);
+        } else {
+            bg.setColor(0x00000000);
+            bg.setStroke(dp(1), (accent & 0x00FFFFFF) | 0x66000000);
+        }
+        btn.setBackground(bg);
         return btn;
     }
 
@@ -4149,16 +4895,15 @@ public class MainActivity extends Activity {
         parent.addView(input);
     }
 
-    private void stSwitchRow(LinearLayout parent, String title, String sub, boolean dark, M3Switch sw) {
+    private void stSwitchRow(LinearLayout parent, int iconRes, String title, String sub, boolean dark, M3Switch sw) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        rlp.topMargin = dp(6);
         row.setLayoutParams(rlp);
-        row.setBackgroundResource(dark ? R.drawable.bg_opt_row : R.drawable.bg_opt_row_light);
-        row.setPadding(dp(14), dp(12), dp(14), dp(12));
+        row.setPadding(dp(8), dp(8), dp(8), dp(8));
+        if (iconRes != 0) row.addView(stIcon(iconRes, dark));
 
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
@@ -4193,19 +4938,72 @@ public class MainActivity extends Activity {
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
         stSection(page, "外观主题", "选择界面主题，切换立即生效", dark);
-        final String cur = Theme.mode(this);
-        stOption(page, "system", "跟随系统", "随系统设置自动切换深色或浅色", dark,
-                "system".equals(cur), pager, new Runnable() {
-                    @Override public void run() { pickTheme("system", d); }
+        LinearLayout themeCard = stCard(dark);
+        if ("material".equals(homeStyle())) {
+            // v9.102.5：Material 固定深色外观，不支持深浅切换——显示提示替代选项
+            TextView tip = new TextView(this);
+            tip.setText("极简模式为固定深色外观\n卡片半透明 · 文字自适应，无需切换主题");
+            tip.setTextSize(13);
+            tip.setTextColor(Theme.textSecondary(this));
+            tip.setPadding(dp(8), dp(10), dp(8), dp(10));
+            themeCard.addView(tip);
+        } else {
+            final String cur = Theme.mode(this);
+            stOption(themeCard, "system", R.drawable.ic_set_auto, "跟随系统", "随系统设置自动切换深色或浅色", dark,
+                    "system".equals(cur), pager, new Runnable() {
+                        @Override public void run() { pickTheme("system", d); }
+                    });
+            themeCard.addView(stDivider(dark));
+            stOption(themeCard, "dark", R.drawable.ic_set_dark, "深色", "深色天空渐变 · 夜间更护眼", dark,
+                    "dark".equals(cur), pager, new Runnable() {
+                        @Override public void run() { pickTheme("dark", d); }
+                    });
+            themeCard.addView(stDivider(dark));
+            stOption(themeCard, "light", R.drawable.ic_set_light, "浅色", "明亮天空渐变 · 白天更清爽", dark,
+                    "light".equals(cur), pager, new Runnable() {
+                        @Override public void run() { pickTheme("light", d); }
+                    });
+        }
+        page.addView(themeCard);
+
+        // v9.93：主界面风格（渐变动态 / Material You 极简）
+        stSection(page, "主界面风格", "选择主界面的背景与信息呈现方式", dark);
+        LinearLayout styleCard = stCard(dark);
+        final String hs = homeStyle();
+        stOption(styleCard, "gradient", R.drawable.ic_set_light, "渐变动态", "随时间与天气变化的天色渐变 + 天气动画", dark,
+                "gradient".equals(hs), pager, new Runnable() {
+                    @Override public void run() { pickHomeStyle("gradient", d); }
                 });
-        stOption(page, "dark", "深色", "深色天空渐变 · 夜间更护眼", dark,
-                "dark".equals(cur), pager, new Runnable() {
-                    @Override public void run() { pickTheme("dark", d); }
+        styleCard.addView(stDivider(dark));
+        stOption(styleCard, "material", R.drawable.ic_set_palette, "极简模式", "柔和纯色底 · 大字天气图案 · 纯文字信息", dark,
+                "material".equals(hs), pager, new Runnable() {
+                    @Override public void run() { pickHomeStyle("material", d); }
                 });
-        stOption(page, "light", "浅色", "明亮天空渐变 · 白天更清爽", dark,
-                "light".equals(cur), pager, new Runnable() {
-                    @Override public void run() { pickTheme("light", d); }
-                });
+        page.addView(styleCard);
+
+        // v9.102.1：Material 自定义背景壁纸——仅 Material 风格显示，切换时动画出现/关闭
+        if ("material".equals(homeStyle())) {
+            stSection(page, "背景壁纸", "极简模式的自定义背景图片，全局生效", dark);
+            LinearLayout bgCard = stCard(dark);
+            final String bgPath = Theme.m3BgPath(this);
+            stEntry(bgCard, R.drawable.ic_set_palette, "选择壁纸图片",
+                    "从相册选择背景图 · 立即生效", bgPath != null ? "已设置" : "未设置",
+                    dark, new Runnable() {
+                        @Override public void run() { pickWallpaper(); }
+                    });
+            if (bgPath != null) {
+                bgCard.addView(stDivider(dark));
+                stEntry(bgCard, R.drawable.ic_set_light, "恢复默认纯色",
+                        "清除自定义壁纸", "", dark, new Runnable() {
+                            @Override public void run() { clearWallpaper(d); }
+                        });
+            }
+            bgCard.setAlpha(0f);
+            bgCard.setTranslationY(dp(12));
+            bgCard.animate().alpha(1f).translationY(0f).setDuration(300)
+                    .setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
+            page.addView(bgCard);
+        }
 
         // v9.88.5：预警低饱和显示开关（引擎已收敛为经典 Java View）
         stSection(page, "预警显示", "开启后预警提示使用低饱和柔和配色", dark);
@@ -4217,16 +5015,45 @@ public class MainActivity extends Activity {
                 rerenderAlertBar();   // v9.88.6：立即重绘主页预警条，无需重新拉取
             }
         });
-        stSwitchRow(page, "预警信息低饱和显示", "红/橙/黄/蓝等级色替换为低饱和柔和色", dark, muteSw);
+        LinearLayout alertCard = stCard(dark);
+        stSwitchRow(alertCard, R.drawable.ic_set_palette, "预警信息低饱和显示", "红/橙/黄/蓝等级色替换为低饱和柔和色", dark, muteSw);
+        page.addView(alertCard);
 
         return page;
     }
 
+    /** v9.97：UI 切换仿 NeriPlayer——就地换色，不 recreate、不返回主界面、面板保持当前页 */
     private void pickTheme(String m, Dialog d) {
         if (m.equals(Theme.mode(this))) { d.dismiss(); return; }
         Theme.setMode(this, m);
-        reopenSettings = true;
-        recreate();
+        applyUiInPlace();                    // 主界面原地换色
+        showSettingsDialog("appearance", d); // 面板就地重建（保持外观二级页）
+    }
+
+    /** v9.102.3：选择 Material 背景壁纸——调用系统相册（ACTION_PICK），无相册应用时回退文件选择器 */
+    private void pickWallpaper() {
+        try {
+            Intent ei = new Intent(Intent.ACTION_PICK,
+                    android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+            startActivityForResult(ei, REQ_M3_BG);
+        } catch (Exception e) {
+            try {
+                Intent ei = new Intent(Intent.ACTION_GET_CONTENT);
+                ei.setType("image/*");
+                startActivityForResult(ei, REQ_M3_BG);
+            } catch (Exception e2) {
+                Toast.makeText(this, "无法打开相册", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    /** v9.102.1：清除自定义壁纸，恢复 Material 纯色背景 */
+    private void clearWallpaper(final Dialog d) {
+        String bg = Theme.m3BgPath(this);
+        if (bg != null) { new java.io.File(bg).delete(); }
+        Theme.setM3BgPath(this, null);
+        applyUiInPlace();
+        showSettingsDialog("appearance", d);
     }
 
     private LinearLayout buildLocBgPage(final boolean dark, final Dialog d, final SettingsPager pager) {
@@ -4234,25 +5061,31 @@ public class MainActivity extends Activity {
         page.setOrientation(LinearLayout.VERTICAL);
         stSection(page, "定位方式", "刷新时按所选方式重新定位", dark);
         final OptionRow[] rows = new OptionRow[3];
-        rows[0] = stOption(page, "auto", "自动切换", "GPS 可用时优先，否则 IP 定位", dark,
+        LinearLayout locCard = stCard(dark);
+        rows[0] = stOption(locCard, "auto", R.drawable.ic_set_my_location, "自动切换", "GPS 可用时优先，否则 IP 定位", dark,
                 "auto".equals(locChoice), pager, new Runnable() {
                     @Override public void run() { pickLoc("auto", rows); }
                 });
-        rows[1] = stOption(page, "gps", "GPS 定位", "卫星 / 网络定位 · 更精准", dark,
+        locCard.addView(stDivider(dark));
+        rows[1] = stOption(locCard, "gps", R.drawable.ic_set_location, "GPS 定位", "卫星 / 网络定位 · 更精准", dark,
                 "gps".equals(locChoice), pager, new Runnable() {
                     @Override public void run() { pickLoc("gps", rows); }
                 });
-        rows[2] = stOption(page, "ip", "IP 定位", "按网络 IP 估算 · 结果可能有偏差", dark,
+        locCard.addView(stDivider(dark));
+        rows[2] = stOption(locCard, "ip", R.drawable.ic_set_ip, "IP 定位", "按网络 IP 估算 · 结果可能有偏差", dark,
                 "ip".equals(locChoice), pager, new Runnable() {
                     @Override public void run() { pickLoc("ip", rows); }
                 });
+        page.addView(locCard);
 
 
         stSection(page, "后台与推送", null, dark);
 
         final M3Switch alertSw = new M3Switch(this);
         alertSw.setChecked(AlertWatcher.enabled(this));
-        stSwitchRow(page, "后台预警监控", "每 30 分钟检查，黄色及以上自动提醒", dark, alertSw);
+        LinearLayout bgCard = stCard(dark);
+        stSwitchRow(bgCard, R.drawable.ic_set_bell, "后台预警监控", "每 30 分钟检查，黄色及以上自动提醒", dark, alertSw);
+        page.addView(bgCard);
         alertSw.setOnCheckedChangeListener(new M3Switch.OnCheckedChangeListener() {
             @Override public void onCheckedChanged(M3Switch sw, boolean on) {
                 if (on && Build.VERSION.SDK_INT >= 33
@@ -4308,7 +5141,7 @@ public class MainActivity extends Activity {
         for (OptionRow r : rows) {
             boolean sel = m.equals(r.row.getTag());
             r.row.setSelected(sel);
-            r.radio.setSelected(sel);
+            setRadioChecked(r.radio, sel);   // v9.92：选中缩放回弹
         }
     }
 
@@ -4322,7 +5155,7 @@ public class MainActivity extends Activity {
         for (OptionRow r : rows) {
             boolean sel = mb == Integer.parseInt((String) r.row.getTag());
             r.row.setSelected(sel);
-            r.radio.setSelected(sel);
+            setRadioChecked(r.radio, sel);   // v9.92：选中缩放回弹
         }
     }
 
@@ -4333,7 +5166,9 @@ public class MainActivity extends Activity {
         stSection(page, "诊断日志", "统一写入单个日志文件", dark);
         final M3Switch logSw = new M3Switch(this);
         logSw.setChecked(LogFile.enabled());
-        stSwitchRow(page, "写入日志", "关闭后不再生成 / 追加日志", dark, logSw);
+        LinearLayout logCard = stCard(dark);
+        stSwitchRow(logCard, R.drawable.ic_set_log, "写入日志", "关闭后不再生成 / 追加日志", dark, logSw);
+        logCard.addView(stDivider(dark));
         logSw.setOnCheckedChangeListener(new M3Switch.OnCheckedChangeListener() {
             @Override public void onCheckedChanged(M3Switch b, boolean on) {
                 LogFile.setEnabled(MainActivity.this, on);
@@ -4344,57 +5179,41 @@ public class MainActivity extends Activity {
 
         final int curMb = LogFile.maxMb();
         final OptionRow[] mbRows = new OptionRow[4];
-        mbRows[0] = stOption(page, "1", "1 MB", "日志超过 1MB 自动清空重写", dark,
+        mbRows[0] = stOption(logCard, "1", R.drawable.ic_set_history, "1 MB", "日志超过 1MB 自动清空重写", dark,
                 curMb == 1, pager, new Runnable() {
                     @Override public void run() { pickLogMaxMb(1, mbRows); }
                 });
-        mbRows[1] = stOption(page, "5", "5 MB", "默认上限", dark,
+        logCard.addView(stDivider(dark));
+        mbRows[1] = stOption(logCard, "5", R.drawable.ic_set_history, "5 MB", "默认上限", dark,
                 curMb == 5, pager, new Runnable() {
                     @Override public void run() { pickLogMaxMb(5, mbRows); }
                 });
-        mbRows[2] = stOption(page, "10", "10 MB", null, dark,
+        logCard.addView(stDivider(dark));
+        mbRows[2] = stOption(logCard, "10", R.drawable.ic_set_history, "10 MB", null, dark,
                 curMb == 10, pager, new Runnable() {
                     @Override public void run() { pickLogMaxMb(10, mbRows); }
                 });
-        mbRows[3] = stOption(page, "0", "不限", "不限制日志文件大小", dark,
+        logCard.addView(stDivider(dark));
+        mbRows[3] = stOption(logCard, "0", R.drawable.ic_set_history, "不限", "不限制日志文件大小", dark,
                 curMb == 0 || (curMb != 1 && curMb != 5 && curMb != 10),
                 pager, new Runnable() {
                     @Override public void run() { pickLogMaxMb(0, mbRows); }
                 });
+        page.addView(logCard);
 
         // v9.87-fix：导出诊断日志（SAF 保存到用户指定位置，任何 ROM 都可用）
-        LinearLayout expRow = new LinearLayout(this);
-        expRow.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout.LayoutParams expLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        expLp.topMargin = dp(6);
-        expRow.setLayoutParams(expLp);
-        expRow.setBackgroundResource(dark ? R.drawable.bg_opt_row : R.drawable.bg_opt_row_light);
-        expRow.setPadding(dp(14), dp(12), dp(14), dp(12));
-        TextView expT = new TextView(this);
-        expT.setText("导出诊断日志");
-        expT.setTextSize(15);
-        expT.setTextColor(Theme.textPrimary(this));
-        expRow.addView(expT);
-        TextView expS = new TextView(this);
-        expS.setText("当前：" + LogFile.state());
-        expS.setTextSize(11);
-        expS.setTextColor(Theme.textSecondary(this));
-        LinearLayout.LayoutParams expSlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        expSlp.topMargin = dp(3);
-        expS.setLayoutParams(expSlp);
-        expRow.addView(expS);
-        expRow.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                Intent ei = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-                ei.addCategory(Intent.CATEGORY_OPENABLE);
-                ei.setType("text/plain");
-                ei.putExtra(Intent.EXTRA_TITLE, LogFile.fileName());
-                startActivityForResult(ei, REQ_EXPORT_LOG);
-            }
-        });
-        page.addView(expRow);
+        LinearLayout expCard = stCard(dark);
+        stEntry(expCard, R.drawable.ic_set_share, "导出诊断日志", "当前：" + LogFile.state(), null, dark,
+                new Runnable() {
+                    @Override public void run() {
+                        Intent ei = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                        ei.addCategory(Intent.CATEGORY_OPENABLE);
+                        ei.setType("text/plain");
+                        ei.putExtra(Intent.EXTRA_TITLE, LogFile.fileName());
+                        startActivityForResult(ei, REQ_EXPORT_LOG);
+                    }
+                });
+        page.addView(expCard);
         return page;
     }
 
@@ -4407,7 +5226,9 @@ public class MainActivity extends Activity {
 
         final M3Switch sw = new M3Switch(this);
         sw.setChecked(CustomAlert.enabled(this));
-        stSwitchRow(page, "开启提醒", "天气刷新后自动检查当前实况", dark, sw);
+        LinearLayout caCard = stCard(dark);
+        stSwitchRow(caCard, R.drawable.ic_set_bell, "开启提醒", "天气刷新后自动检查当前实况", dark, sw);
+        page.addView(caCard);
         sw.setOnCheckedChangeListener(new M3Switch.OnCheckedChangeListener() {
             @Override public void onCheckedChanged(M3Switch s, boolean on) {
                 if (on && Build.VERSION.SDK_INT >= 33
@@ -4429,6 +5250,7 @@ public class MainActivity extends Activity {
         final String[] labels = {"温度上限（°C）", "温度下限（°C）", "湿度上限（%）", "湿度下限（%）", "紫外线指数上限"};
         final String[] hints = {"如 35", "如 -5", "如 90", "如 20", "如 8"};
         final EditText[] inputs = new EditText[keys.length];
+        LinearLayout thCard = stCard(dark);
         for (int i = 0; i < keys.length; i++) {
             TextView t = new TextView(this);
             t.setText(labels[i]);
@@ -4438,16 +5260,17 @@ public class MainActivity extends Activity {
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             tlp.topMargin = dp(10);
             t.setLayoutParams(tlp);
-            page.addView(t);
+            thCard.addView(t);
 
             EditText in = new EditText(this);
             in.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
                     | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
                     | android.text.InputType.TYPE_NUMBER_FLAG_SIGNED);
             in.setText(CustomAlert.get(this, keys[i]));
-            stTextInput(page, in, hints[i], dark);
+            stTextInput(thCard, in, hints[i], dark);
             inputs[i] = in;
         }
+        page.addView(thCard);
 
         TextView save = stButton("保存阈值", dark, true);
         save.setOnClickListener(new View.OnClickListener() {
@@ -4477,41 +5300,47 @@ public class MainActivity extends Activity {
         final EditText hostInput = new EditText(this);
         final TextView status = new TextView(this);
 
-        rows[0] = stOption(page, WeatherSources.OPEN_METEO, "Open-Meteo", "默认源 · 无需密钥", dark,
+        LinearLayout srcCard = stCard(dark);
+        rows[0] = stOption(srcCard, WeatherSources.OPEN_METEO, R.drawable.ic_set_cloud, "Open-Meteo", "默认源 · 无需密钥", dark,
                 WeatherSources.OPEN_METEO.equals(initType), pager, new Runnable() {
                     @Override public void run() {
                         selType[0] = WeatherSources.OPEN_METEO;
                         refreshSourceUi(rows, selType[0], keyInput, hostInput);
                     }
                 });
-        rows[1] = stOption(page, WeatherSources.QWEATHER, "和风天气", "免费官方源 · 需 Key", dark,
+        srcCard.addView(stDivider(dark));
+        rows[1] = stOption(srcCard, WeatherSources.QWEATHER, R.drawable.ic_set_cloud, "和风天气", "免费官方源 · 需 Key", dark,
                 WeatherSources.QWEATHER.equals(initType), pager, new Runnable() {
                     @Override public void run() {
                         selType[0] = WeatherSources.QWEATHER;
                         refreshSourceUi(rows, selType[0], keyInput, hostInput);
                     }
                 });
-        rows[2] = stOption(page, WeatherSources.SENIVERSE, "心知天气", "需 API Key", dark,
+        srcCard.addView(stDivider(dark));
+        rows[2] = stOption(srcCard, WeatherSources.SENIVERSE, R.drawable.ic_set_cloud, "心知天气", "需 API Key", dark,
                 WeatherSources.SENIVERSE.equals(initType), pager, new Runnable() {
                     @Override public void run() {
                         selType[0] = WeatherSources.SENIVERSE;
                         refreshSourceUi(rows, selType[0], keyInput, hostInput);
                     }
                 });
-        rows[3] = stOption(page, WeatherSources.CAIYUN, "彩云天气", "需 Token", dark,
+        srcCard.addView(stDivider(dark));
+        rows[3] = stOption(srcCard, WeatherSources.CAIYUN, R.drawable.ic_set_cloud, "彩云天气", "需 Token", dark,
                 WeatherSources.CAIYUN.equals(initType), pager, new Runnable() {
                     @Override public void run() {
                         selType[0] = WeatherSources.CAIYUN;
                         refreshSourceUi(rows, selType[0], keyInput, hostInput);
                     }
                 });
-        rows[4] = stOption(page, WeatherSources.AMAP, "高德天气", "需 Key", dark,
+        srcCard.addView(stDivider(dark));
+        rows[4] = stOption(srcCard, WeatherSources.AMAP, R.drawable.ic_set_cloud, "高德天气", "需 Key", dark,
                 WeatherSources.AMAP.equals(initType), pager, new Runnable() {
                     @Override public void run() {
                         selType[0] = WeatherSources.AMAP;
                         refreshSourceUi(rows, selType[0], keyInput, hostInput);
                     }
                 });
+        page.addView(srcCard);
 
         stTextInput(page, keyInput, keyHint(initType), dark);
         keyInput.setText(WeatherSources.key(this, initType));
@@ -4618,10 +5447,10 @@ public class MainActivity extends Activity {
         for (OptionRow r : rows) {
             boolean sel = type.equals(r.row.getTag());
             r.row.setSelected(sel);
-            r.radio.setSelected(sel);
+            setRadioChecked(r.radio, sel);   // v9.92：选中缩放回弹
         }
         boolean needKey = !WeatherSources.OPEN_METEO.equals(type);
-        keyInput.setVisibility(needKey ? View.VISIBLE : View.GONE);
+        animateRevealView(keyInput, needKey);   // v9.92：淡入 + 上移动画代替瞬间显隐
         if (needKey) {
             // v9.89：各源 Key 隔离，切换时加载对应源已保存的 Key
             keyInput.setHint(keyHint(type));
@@ -4629,7 +5458,7 @@ public class MainActivity extends Activity {
         }
         // v9.87-fix1：和风专属 Host 输入框，仅和风源显示
         boolean qw = WeatherSources.QWEATHER.equals(type);
-        hostInput.setVisibility(qw ? View.VISIBLE : View.GONE);
+        animateRevealView(hostInput, qw);   // v9.92：淡入 + 上移动画代替瞬间显隐
         if (qw) hostInput.setText(WeatherSources.qHost(MainActivity.this));
     }
 
@@ -4966,19 +5795,38 @@ public class MainActivity extends Activity {
      *  保证浅色模式夜晚等任何时段次级文字对比度都足够明显。 */
     private void applyCardTexts(int[] pal) {
         if (glassCards == null) return;
-        int[] cols = Theme.cardTextColors(pal[1]);   // mid 渐变代表卡片区域
+        int[] cols = cardCols(pal);   // v9.102.4：壁纸模式按壁纸亮度取字色组，否则 mid 渐变色
         final int[][] pairs = {
                 {Theme.textPrimary(this), cols[0]},
                 {Theme.textSecondary(this), cols[1]},
                 {Theme.accent(this), cols[2]},
                 {0xFF1F2A36, cols[0]}, {0xFFF5F7FA, cols[0]},
                 {0xFF5C6B7A, cols[1]}, {0xFFD9E2EC, cols[1]},
+                {0xD95C6B7A, cols[1]},   // v9.100：浅色 cSub 小字（日出日落等）卡片内自适应
                 {0xFF1F6FEB, cols[2]}, {0xFF3D7BD9, cols[2]},
                 {0xFF2F6FEB, cols[2]}, {0xFF6FB3E8, cols[2]},
                 {0xFF7EB6FF, cols[2]}, {0xFF8FC0F5, cols[2]},
         };
         for (View card : glassCards) {
             if (card != null) recolorCard(card, cols, pairs);
+        }
+    }
+
+    /** v9.94：卡片容器样式——Material 极简用纯色容器（深色 8% 白 / 浅色 66% 白），渐变模式恢复毛玻璃 */
+    private void styleCards() {
+        if (glassCards == null) return;
+        if (materialHome) {
+            int cardColor;
+            cardColor = 0x1FFFFFFF;   // v9.103.1：极简模式卡片统一半透明（12% 白），随背景亮度自适应文字
+            for (View card : glassCards) {
+                if (card == null) continue;
+                GradientDrawable gd = new GradientDrawable();
+                gd.setColor(cardColor);
+                gd.setCornerRadius(dp(22));
+                card.setBackground(gd);
+            }
+        } else {
+            applyGlass();
         }
     }
 
@@ -4996,15 +5844,17 @@ public class MainActivity extends Activity {
     }
 
     private void applyTopColors(boolean light) {
+        // v9.101：Material 浅色页面文字用不透明灰蓝（小字清晰）；渐变模式维持原色值
         final int cMain = light ? 0xFF1F2A36 : 0xFFFFFFFF;
-        final int cSub  = light ? 0xD95C6B7A : 0xE6FFFFFF;
-        final int cWeak = light ? 0xC05C6B7A : 0xB3FFFFFF;
+        final int cSub  = light ? (materialHome ? 0xFF5C6B7A : 0xD95C6B7A) : 0xE6FFFFFF;
+        final int cWeak = light ? (materialHome ? 0xE65C6B7A : 0xC05C6B7A) : 0xB3FFFFFF;
         cityText.setTextColor(cMain);
         tempText.setTextColor(cMain);
+        if (bigIconTv != null) bigIconTv.setTextColor(cMain);   // v9.93：大天气图案随背景亮度
         descText.setTextColor(cMain);
         feelsText.setTextColor(cSub);
         sourceText.setTextColor(cSub);
-        sunTimeText.setTextColor(cSub);
+        sunTimeText.setTextColor(cSub);   // 卡片内由 applyCardTexts 自适应覆盖（v9.100）
         regionText.setTextColor(cWeak);
         ipHintText.setTextColor(cWeak);
         if (refreshLabel != null) refreshLabel.setTextColor(cMain);

@@ -266,4 +266,16 @@ public class Theme {
     private static float clamp01(float v) {
         return v < 0f ? 0f : (v > 1f ? 1f : v);
     }
+
+    // ---------- v9.102.1：Material 自定义背景壁纸 ----------
+
+    public static String m3BgPath(Context c) {
+        return c.getSharedPreferences("ui_pref", Context.MODE_PRIVATE)
+                .getString("m3_bg_path", null);
+    }
+
+    public static void setM3BgPath(Context c, String p) {
+        c.getSharedPreferences("ui_pref", Context.MODE_PRIVATE)
+                .edit().putString("m3_bg_path", p).apply();
+    }
 }

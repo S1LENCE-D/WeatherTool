@@ -110,5 +110,11 @@
 
         <!-- v9.88.4：后台常驻服务已移除——改为每 15 分钟闹钟心跳（CacheRefreshReceiver），
              静默检查：刷缓存 + 错过补播报/补查预警，无常驻进程无通知 -->
+        <!-- v9.104.2：自绘壁纸裁剪界面 -->
+        <activity
+            android:name=".CropActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
     </application>
 </manifest>

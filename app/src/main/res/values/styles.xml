@@ -5,4 +5,18 @@
         <item name="android:windowEnterAnimation">@anim/settings_sheet_in</item>
         <item name="android:windowExitAnimation">@anim/settings_sheet_out</item>
     </style>
+
+    <!-- v9.94：设置面板非浮动窗口主题——浮动窗口不绘制状态栏区域，
+         导致全屏面板顶部一直透出主界面。非浮动 + 透明背景后，
+         状态栏/手势条区域由面板自绘背景铺满。 -->
+    <style name="SettingsSheetTheme" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowAnimationStyle">@style/SettingsSheetAnim</item>
+    </style>
+    <style name="SettingsSheetThemeLight" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowAnimationStyle">@style/SettingsSheetAnim</item>
+    </style>
 </resources>
