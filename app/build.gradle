@@ -25,7 +25,7 @@ android {
                 keyAlias System.getenv('SIGNING_KEY_ALIAS')
                 keyPassword System.getenv('SIGNING_KEY_PASS')
             }
-            // v9.90：与 v9.87（apksigner 手工签名）对齐——显式开启 v2+v3 签名方案
+            // 显式开启 v2+v3 签名方案（与历史 apksigner 手工签名产物一致）
             enableV2Signing true
             enableV3Signing true
         }
@@ -33,7 +33,7 @@ android {
 
     buildTypes {
         release {
-            // v9.90：开 R8 裁剪 + 资源收缩（Compose 库自带 consumer 规则）
+            // R8 裁剪 + 资源收缩（纯 Java 工程，混淆规则见 app/proguard-rules.pro）
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'

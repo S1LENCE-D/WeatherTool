@@ -4328,7 +4328,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         row.setLayoutParams(rlp);
-        // v9.91（Miuix）：条目透明底放卡片内，保留按压波纹
+        // 设置页条目：透明底置于分组卡片内，保留按压波纹
         row.setPadding(dp(8), dp(10), dp(8), dp(10));
         if (Build.VERSION.SDK_INT >= 23) {
             row.setForeground(new android.graphics.drawable.RippleDrawable(
@@ -4703,7 +4703,7 @@ public class MainActivity extends Activity {
         OptionRow(LinearLayout r, View b) { row = r; radio = b; }
     }
 
-    /** Miuix 图标块：42dp 圆形底（primary 8%）+ 24dp 图标（primary 色） */
+    /** 设置页图标块：42dp 圆形底（primary 8%）+ 24dp 图标（primary 色） */
     private ImageView stIcon(int resId, boolean dark) {
         ImageView iv = new ImageView(this);
         int tile = dp(42);
@@ -4718,7 +4718,7 @@ public class MainActivity extends Activity {
         return iv;
     }
 
-    /** Miuix 分组卡片：圆角 16dp、无阴影、柔和底色 */
+    /** 设置页分组卡片：圆角 16dp、无阴影、柔和底色 */
     private LinearLayout stCard(boolean dark) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
@@ -4731,7 +4731,7 @@ public class MainActivity extends Activity {
         return card;
     }
 
-    /** Miuix 卡片内条目分隔线（左右留白 16dp） */
+    /** 设置页卡片内条目分隔线（左右留白 16dp） */
     private View stDivider(boolean dark) {
         View v = new View(this);
         v.setBackgroundResource(dark ? R.drawable.divider_setting_dark : R.drawable.divider_setting_light);
@@ -4825,7 +4825,7 @@ public class MainActivity extends Activity {
         }
         row.addView(col);
 
-        // v9.91（Miuix）：单选控件右置
+        // 设置页条目：单选控件右置
         View radio = new View(this);
         radio.setBackgroundResource(dark ? R.drawable.bg_radio_selector : R.drawable.bg_radio_selector_light);
         radio.setSelected(checked);
