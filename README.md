@@ -1,81 +1,146 @@
 # 简洁天气 WeatherTool
 
-> 极简、纯净、零广告的安卓天气应用 · 酷安 @Eartecd
->
-> 当前版本：**v10.0**（versionCode 150）
+> 极简、纯净、零广告的 Android 天气应用 · 作者：酷安 @Eartecd
 
-纯 Java + Android framework 编写，单 APK 约 **500KB**。
+**当前版本 v10.0**（versionCode 150）· 单 APK 约 **520 KB** · 纯 Java 编写，无第三方运行时依赖
 
 ---
 
-## 功能
+## 特性
 
 ### 天气核心
-- 实时天气 + 多日预报：温度、体感、湿度、风速风向、紫外线、日出日落、月相
-- 多天气源可切换（Open-Meteo 默认 / 和风 / 心知 / 彩云 / 高德）
-- 省市区级联搜索，GPS / 网络定位
-- 本地缓存，弱网断网读取上一次天气信息
+- 实时天气与多日预报：温度、体感、湿度、风、紫外线、日出日落、月相
+- 五类天气源可切换：Open-Meteo（默认，免 Key 开箱即用）、和风天气、心知天气、彩云天气、高德天气
+- 省市区三级级联搜索，GPS / 网络定位
+- 本地缓存，弱网或断网时读取上一次的天气数据
 
-### 推送与后台
-- 每日定时天气简报
-- 气象预警监控推送（15分钟一查）
-- 自定义提醒：温度、湿度、紫外线阈值触发
-- 后台静默更新：天气 / 预警每 15 分钟自动刷新，无通知栏痕迹
+### 提醒与后台
+- 每日定时天气简报（精确闹钟；Android 12+ 无精确闹钟权限时自动降级为 `setAlarmClock`）
+- 气象预警监控（每 15 分钟一轮，黄色及以上预警提醒）
+- 自定义阈值提醒：温度、湿度、紫外线
+- 后台静默刷新：天气与预警每 15 分钟更新一次，无常驻进程、无通知栏痕迹
+- 开机与覆盖安装后自动恢复定时任务
 
 ### 界面
-- 2×2 / 2×4 桌面小组件：毛玻璃质感、多尺寸自适应、深浅主题联动
+- 桌面小组件 2×2（单日）/ 2×4（多日）：毛玻璃质感，深浅主题联动
+- 极简模式：卡片、详情、背景一键统一视觉
+- 壁纸自定义：自选图片 + 内置裁剪工具（拖动 / 缩放 / 旋转 / 网格辅助）
+- 动态渐变背景、雷达雨图、日出日落弧线、月相、指南针、紫外线日曲线
 - 预警详情弹窗（等级色条）+「预警信息低饱和显示」开关
-- 雷达雨图、自绘动效、主题色板、日出日落弧线
+
+---
+
+## 下载与安装
+
+正式版 APK 见 [Releases](https://github.com/S1LENCE-D/WeatherTool/releases/latest)。
+
+- 最低支持 Android 7.0（API 24）
+- 每个 Release 附带的 Source code 压缩包即为该版本的完整源码
+- 覆盖安装即可升级，本地设置与数据保留
 
 ---
 
 ## 编译
 
-> 当前版本在 **ARM64 Linux 环境编译**（JDK 17 + Android SDK），GitHub Actions 亦可持续集成。
+### 环境要求
 
-### 方式 A：手工流水线（Linux，与正式发布一致）
+| 项目 | 版本 |
+| --- | --- |
+| JDK | 17 |
+| Android Gradle Plugin | 9.3.1 |
+| Gradle | 9.5.0（wrapper 已内置，无需单独安装） |
+| compileSdk | 37 |
+| minSdk / targetSdk | 24 / 33 |
 
-```bash
-python3 build_release.py
-```
+工程为纯 Java 实现（42 个源文件，约 1.5 万行），无第三方运行时依赖，除 Android SDK 外无需额外组件。
 
-流程：注入版本信息 → aapt 打包资源 → javac 编译 → d8 转 dex → apksigner 签名。
-产物：`build/WeatherTool_v9.88.3.apk`。
-
-历史分支构建脚本已归档至 `scripts/legacy/`（115% 界面 / 大字版），仅作参考。
-
-### 方式 B：Android Studio（Mac / Windows）
-
-工程含完整 Gradle 配置，直接 Open 后 Sync 构建即可：
+### 方式一：命令行
 
 ```bash
+# 指向本地 Android SDK
+echo "sdk.dir=/path/to/android-sdk" > local.properties
+
 ./gradlew assembleRelease
+# 未配置签名环境变量时产物为：
+# app/build/outputs/apk/release/app-release-unsigned.apk
 ```
 
-### 方式 C：GitHub Actions 自动发布（推荐）
+### 方式二：Android Studio
 
-推送 `v*` 标签即触发 `.github/workflows/release.yml` 自动构建并发布到 Releases：
+直接 Open 工程根目录，等待 Gradle Sync 完成后 Build → Generate Signed Bundle / APK。
+
+### 方式三：GitHub Actions 自动发布
+
+推送 `v*` 标签即触发 `.github/workflows/release.yml`，自动构建并创建 Release：
 
 ```bash
-git tag v9.90 && git push origin v9.90
+git tag v10.0 && git push origin v10.0
 ```
+
+也可在仓库 Actions 页面手动运行（`workflow_dispatch`，填入版本号）。
+
+### 关于签名
+
+CI 从仓库 Secrets 读取签名配置；未配置时输出未签名包，仅供测试。
+
+| Secret | 说明 |
+| --- | --- |
+| `SIGNING_KEYSTORE_BASE64` | keystore 文件的 base64（`openssl base64 -in release.jks \| tr -d '\n'`） |
+| `SIGNING_KEYSTORE_PASS` | keystore 密码 |
+| `SIGNING_KEY_ALIAS` | 密钥别名 |
+| `SIGNING_KEY_PASS` | 密钥密码 |
+
+本地构建时设置同名环境变量即可使用正式签名。
+
+### 在 ARM64 Linux 上编译
+
+Google 官方仅提供 x86_64 版的 `aapt2` / `zipalign`，因此 `gradle.properties` 中通过 `android.aapt2FromMavenOverride` 与 `android.zipalignFromMavenOverride` 指向社区交叉编译版本（[Commit451/android-arm-build-tools](https://github.com/Commit451/android-arm-build-tools)）。
+
+CI 运行在 x86_64，`release.yml` 会预建软链接使该固定路径可用，两种主机都能构建。在 x86_64 主机上本地构建时，删除这两行即可。
+
+---
+
+## 权限说明
+
+| 权限 | 用途 |
+| --- | --- |
+| `INTERNET` / `ACCESS_NETWORK_STATE` | 请求天气数据、判断网络可用性 |
+| `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION` | 定位当前城市 |
+| `ACCESS_LOCATION_EXTRA_COMMANDS` | AGPS 注入 `force_time` / `force_xtra`，加速冷启动 |
+| `ACCESS_BACKGROUND_LOCATION` | 仅声明，便于需要时在系统设置中手动开启「始终允许」 |
+| `SYSTEM_ALERT_WINDOW` | 设置面板以系统悬浮窗呈现，支持拖动与半屏动效 |
+| `POST_NOTIFICATIONS` / `VIBRATE` | 天气简报与预警通知 |
+| `SCHEDULE_EXACT_ALARM` / `RECEIVE_BOOT_COMPLETED` | 定时播报准时触发、重启后恢复任务 |
+| `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | 引导加入电池优化白名单，保证后台提醒可靠 |
+| `WRITE_EXTERNAL_STORAGE`（仅 Android 9 及以下） | 导出诊断日志 |
+| `FOREGROUND_SERVICE` | 每日天气简报服务的启动凭证 |
+
+应用不含统计、广告或埋点 SDK，不上报用户数据；天气请求直连所选天气源。
+
+## 数据来源与声明
+
+天气数据来源于用户选中的天气服务商，相关版权与使用条款归各服务商所有。默认的 Open-Meteo 免 Key 即可使用，其余四家需在「设置 → 天气源」中填入自备的 API Key / Token。
 
 ---
 
 ## 更新记录
 
-- **v10.0**：🎨 全新「极简模式」风格选项——卡片、详情、背景一键统一视觉；🖼️ 壁纸自定义：自选图片 + 内置裁剪工具（拖动 / 缩放 / 旋转 / 网格辅助）；🌫️ 动态渐变背景升级，更多信息卡片毛玻璃质感；🔍 更多信息卡片整体重构
-- **v9.90**：📄 诊断日志全面升级——统一写入单个日志文件、大小上限可调（1MB 起，写满自动清理并提醒）、支持一键关闭；⚡ 界面动画自适应屏幕刷新率上限，高刷屏更丝滑；🪟 设置面板新增「诊断日志」独立栏目
-- **v9.88.3**：🔄 后台静默更新——天气/预警改为每 15 分钟自动更新，预警监控更灵敏，全程无通知栏痕迹 🧭修复无 GPS 硬件设备（如部分平板）定位时闪退
-- **v9.88**：✨ 毛玻璃新视觉——小组件毛玻璃质感与多尺寸自适应、预警等级色条与配色优化、APK 体积大幅精简、数据来源动态显示
-- **v9.87-fix1**：🕐 修复日出日落/月相显示挤压；🪟 小组件内容扩充（降水概率、低温、日出日落、风力）；☁️ 和风天气加入个人专属 API Host输入框
-- **v9.87**：🌐 多天气源切换、🔔 后台预警推送可靠性提升、📍 定位优化
-
----
+完整版本历史见 [CHANGELOG.md](CHANGELOG.md)；最新版 v10.0 带来极简模式、壁纸自定义裁剪与毛玻璃视觉升级。
 
 ## 仓库结构
 
 ```
-app/                    # 主工程（纯 Java，包名 com.simpleweather.app）
-.github/workflows/      # GitHub Actions 自动构建发布（推送 v* 标签触发）
+app/                    # 应用模块（纯 Java，包名 com.simpleweather.app）
+  src/main/java/        # Java 源码（42 个文件）
+  src/main/assets/      # 内置字体与网页资源
+  src/main/res/         # 布局、绘制、图标等资源
+.github/workflows/      # GitHub Actions 自动构建与发布
 ```
+
+## 反馈与贡献
+
+Issue 与 Pull Request 均欢迎。提交代码前请先执行 `./gradlew assembleRelease` 确认工程可编译。
+
+## 许可证
+
+本项目采用 [MIT 许可证](LICENSE)。
