@@ -19,7 +19,6 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- v9.87：前台服务启动凭证（每日天气通知） -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!-- v9.87：精确闹钟（每日定时通知准时触发；Android 12+ 声明，无权限时代码回退 setAlarmClock） -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
