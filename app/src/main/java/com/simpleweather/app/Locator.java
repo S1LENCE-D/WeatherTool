@@ -17,10 +17,10 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
- * v9.22：定位工具，MainActivity（前台/后台刷新）与 SpeakService（通知前强制定位）共用。
+ * v9.22：定位工具，MainActivity（前后台刷新）与定时简报（ReportRunner，取最近一次定位）共用。
  * 流程：2 分钟内 last known 且精度 <=150m 秒回；
- * 否则先检测定位权限——无权限直接走 IP 定位；有权限先等 GPS（至多 5 秒），
- * GPS 超时才改走 IP 定位。定位方式提示由 MainActivity 在每次更新主页信息时统一弹出。
+ * 否则先检测定位权限——无权限直接走 IP 定位；有权限先等 GPS（见 GPS_WAIT_MS，
+ * v9.87-fix 起放宽到 30 秒：类原生无 AGPS 时冷启动较慢），GPS 超时才改走 IP 定位。定位方式提示由 MainActivity 在每次更新主页信息时统一弹出。
  * IP 定位：ipwho.is / ipinfo.io / geojs.io 三路并行先到先得 + 60 秒本地缓存秒回
  * （缓存未绑定公网 IP，窗口必须足够短，避免换网络/换城市后仍秒回旧坐标）。
  * v9.23：IP 缓存双因子验证——60 秒内无条件秒回；60 秒~30 分钟用设备本地

@@ -50,7 +50,8 @@
             android:name=".AlarmReceiver"
             android:exported="false" />
 
-        <!-- v9.87：后台缓存刷新闹钟（每小时静默拉取写缓存，goAsync 无服务） -->
+        <!-- v10.1：15 分钟后台心跳闹钟（刷缓存 + 补播报 + 查预警，全部在接收器的
+             goAsync 线程内完成，不启动任何服务） -->
         <receiver
             android:name=".CacheRefreshReceiver"
             android:exported="false" />
@@ -99,14 +100,10 @@
                 android:resource="@xml/widget_info_2x4" />
         </receiver>
 
-        <service
-            android:name=".SpeakService"
-            android:exported="false" />
-
-        <!-- v9.78：预警检查服务（闹钟触发，短时运行自停，无常驻通知） -->
-        <service
-            android:name=".AlertWatchService"
-            android:exported="false" />
+        <!-- v10.1：SpeakService / AlertWatchService 已删除 —— 两个服务都是从后台广播里
+             启动的（一个前台服务、一个普通服务），在 Android 8+/12+ 会被系统拒绝并抛异常，
+             导致后台崩溃且功能静默失效。现在简报与预警检查都由接收器在自己的
+             goAsync 线程里直接完成（见 ReportRunner / AlertChecker），不再需要服务。 -->
 
         <!-- v9.88.4：后台常驻服务已移除——改为每 15 分钟闹钟心跳（CacheRefreshReceiver），
              静默检查：刷缓存 + 错过补播报/补查预警，无常驻进程无通知 -->

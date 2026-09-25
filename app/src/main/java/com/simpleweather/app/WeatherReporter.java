@@ -29,6 +29,8 @@ public final class WeatherReporter {
     public static final String KEY_MANUAL_LNG = "manual_lng";
     // v9.88.3：最近一次定时播报日期（yyyyMMdd），用于错过补播报去重
     public static final String KEY_LAST_REPORT_DATE = "last_report_date";
+    // v10.1：最近一次「成功送达简报」的时间戳（设置页自检展示）
+    public static final String KEY_LAST_OK_TS = "last_ok_ts";
 
     private WeatherReporter() { }
 
@@ -121,12 +123,23 @@ public final class WeatherReporter {
     }
 
     /**
-     * v9.87：注册每日闹钟。改为一次性「精确闹钟 + AllowWhileIdle」——
-     * setInexactRepeating 在 Doze/省电下会被系统大幅延迟甚至跳过（后台不通知的主因）；
-     * 每次触发后由 AlarmReceiver 重新调度下一天，等效每日循环。
-     * 权限链：setExactAndAllowWhileIdle（Android 6+ 免权限，12+ 需 SCHEDULE_EXACT_ALARM）
-     *  → 无权限回退 setAlarmClock（免权限、Doze 必达）
-     *  → 异常兜底 setInexactRepeating（老系统容错）。
+     * 注册每日闹钟：一次性「精确闹钟 + AllowWhileIdle」，每次触发后由
+     * {@link AlarmReceiver} 重排下一天，等效每日循环。
+     *
+     * <p><b>v10.1 修正</b>：旧注释称「setAlarmClock 免权限」，这在 Android 12+ 是<b>错的</b>——
+     * 官方文档明确：`setExact()` / `setExactAndAllowWhileIdle()` / `setAlarmClock()`
+     * 三者都需要 SCHEDULE_EXACT_ALARM，缺权限一律抛 SecurityException。
+     * 旧链路在缺权限时会一路降级到 setInexactRepeating（**不精确**的每日重复闹钟），
+     * 表现就是「到点了没响 / 响得不准」。
+     *
+     * <p>现在的降级顺序（每一级都明确说清代价）：
+     * <ol>
+     *   <li>有精确闹钟权限 → {@code setExactAndAllowWhileIdle}（准点、Doze 可唤醒）；</li>
+     *   <li>无精确闹钟权限 → {@code setAndAllowWhileIdle}（**可能被系统小幅推迟**，
+     *       但仍是 doze-tolerant 的一次性闹钟，比 setInexactRepeating 可靠）
+     *       —— 同时应在 App 内引导用户去开启「闹钟与提醒」权限；</li>
+     *   <li>任何异常 → {@code setInexactRepeating} 兜底（最差情况，聊胜于无）。</li>
+     * </ol>
      */
     public static void schedule(Context ctx, int hour, int minute) {
         AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
@@ -143,25 +156,23 @@ public final class WeatherReporter {
         }
         long trigger = c.getTimeInMillis();
 
-        // Android 12+：检查精确闹钟权限（反射调用，避免低版本编译问题）
-        if (Build.VERSION.SDK_INT >= 31) {
+        // Android 12+ 才有「精确闹钟权限」概念（API 31 起可直连调用，无需反射）
+        if (Build.VERSION.SDK_INT >= 31 && !canExactAlarms(am)) {
+            Diag.i("schedule: 无精确闹钟权限，降级为 setAndAllowWhileIdle（时刻可能被推迟）");
             try {
-                java.lang.reflect.Method m =
-                        AlarmManager.class.getMethod("canScheduleExactAlarms");
-                boolean ok = (Boolean) m.invoke(am);
-                if (!ok) {
-                    // 无精确闹钟权限：setAlarmClock 免权限、Doze 下必达
-                    am.setAlarmClock(new AlarmManager.AlarmClockInfo(trigger, null), pi);
-                    return;
-                }
-            } catch (Exception ignored) { }
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, trigger, pi);
+                return;
+            } catch (Exception e) {
+                Diag.i("schedule: setAndAllowWhileIdle 失败 " + e);
+            }
         }
         try {
             am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, trigger, pi);
         } catch (SecurityException e) {
-            // Android 12+ 权限被拒（未声明/被关闭）：setAlarmClock 兜底
+            // 权限被系统/用户拒绝（可能发生在 canScheduleExactAlarms() 之后）
+            Diag.i("schedule: setExactAndAllowWhileIdle 被拒，降级 setAndAllowWhileIdle");
             try {
-                am.setAlarmClock(new AlarmManager.AlarmClockInfo(trigger, null), pi);
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, trigger, pi);
             } catch (Exception e2) {
                 am.setInexactRepeating(AlarmManager.RTC_WAKEUP, trigger,
                         AlarmManager.INTERVAL_DAY, pi);
@@ -170,6 +181,21 @@ public final class WeatherReporter {
             // 极老系统/厂商兼容：退化为重复闹钟
             am.setInexactRepeating(AlarmManager.RTC_WAKEUP, trigger,
                     AlarmManager.INTERVAL_DAY, pi);
+        }
+    }
+
+    /** 精确闹钟权限是否可用（Android 12+ 才需要；更低版本恒 true） */
+    public static boolean canExactAlarms(Context ctx) {
+        if (Build.VERSION.SDK_INT < 31) return true;
+        AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+        return am != null && canExactAlarms(am);
+    }
+
+    private static boolean canExactAlarms(AlarmManager am) {
+        try {
+            return am.canScheduleExactAlarms();
+        } catch (Throwable t) {
+            return false;   // 厂商实现异常时按「无权限」处理（走降级路径，不会崩）
         }
     }
 
@@ -196,23 +222,42 @@ public final class WeatherReporter {
      * v9.88.3：错过补播报——后台心跳（每 15 分钟）调用。
      * 已过今日计划时刻 && 今天定时播报尚未执行 → 补一次播报并立即写标记，
      * 之后的心跳检测到「已播报」自动跳过。
-     * 手动「立即播报」不写标记（不吞定时播报，宁多勿漏）。
+     *
+     * <p>v10.1：标记改由 {@link ReportRunner} 在**通知真正送出之后**才写；手动「立即播报」
+     * 走的也是 ReportRunner，因此同样会写标记（心跳补发据此跳过）。定时闹钟本身不看标记，
+     * 到点仍会照常推送。
      */
-    public static void maybeCatchUpReport(Context ctx) {
+    public static boolean catchUpReport(Context ctx) {   // true=今日已确认送达
         SharedPreferences sp = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        if (!sp.getBoolean(KEY_ENABLED, false)) return;            // 开关关闭：不补
+        if (!sp.getBoolean(KEY_ENABLED, false)) return false;              // 开关关闭：不补
         String today = todayKey();
-        if (today.equals(sp.getString(KEY_LAST_REPORT_DATE, ""))) return;  // 已播报：跳过
+        if (today.equals(sp.getString(KEY_LAST_REPORT_DATE, ""))) return true;  // 今天已送达
         Calendar plan = Calendar.getInstance();
         plan.set(Calendar.HOUR_OF_DAY, sp.getInt(KEY_HOUR, 8));
         plan.set(Calendar.MINUTE, sp.getInt(KEY_MINUTE, 0));
         plan.set(Calendar.SECOND, 0);
         plan.set(Calendar.MILLISECOND, 0);
-        if (System.currentTimeMillis() < plan.getTimeInMillis()) return;   // 未到点：不补
-        // 到点未播：走与 AlarmReceiver 相同链路（前台服务启动凭证，播报后自停）
-        Intent svc = new Intent(ctx, SpeakService.class);
-        if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(svc);
-        else ctx.startService(svc);
-        sp.edit().putString(KEY_LAST_REPORT_DATE, today).apply();   // 先写标记防心跳重复补
+        if (System.currentTimeMillis() < plan.getTimeInMillis()) return false;   // 未到点
+        // v10.1：直接在本线程完成（调用方是心跳接收器的 goAsync 线程），不再启动服务；
+        // 且「今日已送达」标记由 ReportRunner 在通知真正送出后才写 —— 失败还能下一轮再补。
+        return ReportRunner.run(ctx);
+    }
+
+    /** v10.1：记录「简报成功送达」的时间戳（设置页自检用） */
+    public static void recordOk(Context ctx) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putLong(KEY_LAST_OK_TS, System.currentTimeMillis()).apply();
+    }
+
+    /** 最近一次成功送达简报的时间戳（0=从未成功） */
+    public static long lastOkTs(Context ctx) {
+        return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getLong(KEY_LAST_OK_TS, 0L);
+    }
+
+    /** 今日是否已送达简报 */
+    public static boolean reportedToday(Context ctx) {
+        return todayKey().equals(ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getString(KEY_LAST_REPORT_DATE, ""));
     }
 }

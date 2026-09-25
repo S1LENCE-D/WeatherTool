@@ -39,6 +39,7 @@
     <!-- 跟随系统 -->
     <LinearLayout
         android:id="@+id/optSystem"
+        android:minHeight="48dp"
         android:tag="system"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -84,6 +85,7 @@
     <!-- 深色 -->
     <LinearLayout
         android:id="@+id/optDark"
+        android:minHeight="48dp"
         android:tag="dark"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -129,6 +131,7 @@
     <!-- 浅色 -->
     <LinearLayout
         android:id="@+id/optLight"
+        android:minHeight="48dp"
         android:tag="light"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -194,6 +197,7 @@
     <!-- 自动 -->
     <LinearLayout
         android:id="@+id/optLocAuto"
+        android:minHeight="48dp"
         android:tag="auto"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -239,6 +243,7 @@
     <!-- GPS -->
     <LinearLayout
         android:id="@+id/optLocGps"
+        android:minHeight="48dp"
         android:tag="gps"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -284,6 +289,7 @@
     <!-- IP -->
     <LinearLayout
         android:id="@+id/optLocIp"
+        android:minHeight="48dp"
         android:tag="ip"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -381,6 +387,7 @@
 
         <com.simpleweather.app.M3Switch
             android:id="@+id/alertWatchSwitch"
+            android:contentDescription="后台预警监控"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content" />
     </LinearLayout>
@@ -422,6 +429,7 @@
 
         <com.simpleweather.app.M3Switch
             android:id="@+id/keepAliveSwitch"
+            android:contentDescription="忽略电池优化"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content" />
     </LinearLayout>
@@ -443,10 +451,11 @@
         android:id="@+id/themeDone"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:minHeight="48dp"
         android:layout_marginTop="16dp"
-        android:gravity="end"
-        android:paddingTop="10dp"
-        android:paddingBottom="2dp"
+        android:gravity="end|center_vertical"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp"
         android:text="完成"
         android:textColor="#6FB3E8"
         android:textSize="14sp"

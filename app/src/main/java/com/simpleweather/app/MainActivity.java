@@ -107,7 +107,7 @@ public class MainActivity extends Activity {
     private TextView creditTv;                       // v9.57：底部制作者信息随背景亮度自适应
     private View alertBar, refreshBtn;
     private ImageView refreshIcon;
-    private TextView refreshLabel, cityIconTv, gearIconTv;
+    private TextView cityIconTv, gearIconTv;
     private WeatherBackView weatherBg;
     private TextView alertText, mapIcon, reportIcon;
     private TextView regionText, ipHintText;
@@ -149,6 +149,61 @@ public class MainActivity extends Activity {
 
     // 毛玻璃：背景模糊快照 + 玻璃卡片集合
     private Bitmap glassCache;
+
+    // ===== v10.1：底部悬浮栏（可选）=====
+    // 把「设置」与「降雨图」入口收到底部悬浮胶囊里；上滑页面自动隐藏、下滑复现。
+    // 玻璃质感复用已有的背景模糊快照（GlassGlassDrawable），不引入第三方依赖。
+    private View floatBar;
+    private final java.util.List<TextView> barIcons = new java.util.ArrayList<TextView>();
+    private final java.util.List<TextView> barLabels = new java.util.ArrayList<TextView>();
+    private boolean barHidden = false;      // 当前是否已收起
+    private int barLastScrollY = 0;         // 上一次滚动位置（判断上滑/下滑）
+    private int sysInsetBottom = 0;         // 系统栏底部 inset（避让手势条）
+    private int sysInsetTop = 0;            // 系统栏顶部 inset
+    // 页面栈：0=主页 1=降雨图（内嵌页）2=设置（整页浮层）。
+    // 转场方向按底栏相对位置决定：目标页在右侧 → 自右滑入、旧页向左让位。
+    private static final int PAGE_HOME = 0, PAGE_RAIN = 1, PAGE_SETTINGS = 2;
+    private int currentPage = PAGE_HOME;
+    private android.view.ViewGroup pageLayer;   // 内嵌页容器（位于主页内容之上、底栏之下）
+    private RainMapView rainPage;
+    private boolean rainFromRight = true;   // 降雨图页本次是从右侧滑入的（出场方向随之）
+    private View rainPageRoot;              // 内嵌页根视图（用于补顶部 inset）
+    // v10.2：设置页改为**同窗口内嵌页**（不再用对话框窗口）——
+    // 三页同处一个窗口，底栏天然压在其上、可点，切换才能连续不打架。
+    private android.view.ViewGroup settingsPage;   // 设置页容器（rootFrame 内，在内嵌页之上、底栏之下）
+    private boolean settingsPageOpen = false;   // 设置页是否处于打开状态
+    private int settingsEnterDir = 1;           // 打开设置时的入场方向（读实时位置得出）
+    private int settingsSpan = 2;               // 打开设置时跨了几格（退出时原路返回）
+    private int pageBeforeSettings = PAGE_HOME; // 打开设置前所在的内容页（关闭后回到它）
+    private View settingsRoot;                  // 设置页内容根视图
+    private Dialog hostDialog;                  // 仅作内部构建代码的签名载体（从不 show）
+    private LinearLayout settingsListPage, settingsDetailPage;   // 供返回键处理使用
+    private View scrollRootView;                // 主页滚动容器（做视差让位动画）
+    private View[] roundGlassBtns;              // v10.1：顶栏三个圆形玻璃按钮
+    private double rainLat = 0, rainLng = 0;    // 内嵌页当前加载的坐标（变了才重载）
+    private boolean rainLoaded = false;
+    private boolean rainPageFailed = false;     // 内嵌页创建失败 → 退回独立 Activity
+
+    // ===== v10.1：三页统一切入/切出动效 =====
+    // 方向规则：目标页在当前位置右侧 → 旧页向左让出、新页自右滑入；在左侧则整体反向。
+    // 主页(0) → 降雨图(1) → 设置(2)，所以任意两页之间方向都按底栏图标相对位置对齐。
+    private static final long PAGE_MS = 220;              // 偏快
+    private static final long BAR_COLOR_MS = 180;         // 底栏选中色过渡
+
+    /** 统一的转场曲线：贝塞尔 e(0.2,0,0,1) —— 起步快、收尾稳 */
+    private static android.view.animation.Interpolator pageEase() {
+        return new android.view.animation.PathInterpolator(0.2f, 0f, 0f, 1f);
+    }
+
+    /** 统一把某个视图滑到指定 translationX（时长/曲线一致） */
+    private void slideTo(View v, float x, Runnable after) {
+        if (v == null) return;
+        v.animate().cancel();
+        android.view.ViewPropertyAnimator a = v.animate().translationX(x)
+                .setDuration(PAGE_MS).setInterpolator(pageEase());
+        if (after != null) a.withEndAction(after);
+        a.start();
+    }
     private View[] glassCards;
     private final Handler autoRefresh = new Handler(Looper.getMainLooper());
     private final Runnable refreshTask = new Runnable() {
@@ -323,7 +378,6 @@ public class MainActivity extends Activity {
         moonText = findViewById(R.id.moonText);
         refreshBtn = findViewById(R.id.refreshBtn);
         refreshIcon = findViewById(R.id.refreshIcon);
-        refreshLabel = findViewById(R.id.refreshLabel);
         cityIconTv = findViewById(R.id.cityIcon);
         gearIconTv = findViewById(R.id.gearIcon);
         weatherBg = findViewById(R.id.weatherBg);
@@ -385,19 +439,7 @@ public class MainActivity extends Activity {
         mapCardView.setVisibility(mapCardShown ? View.VISIBLE : View.GONE);
         mapCardView.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View v) {
-                Intent it = new Intent(MainActivity.this, RainMapActivity.class);
-                // v9.40：手动选择城市时传手动坐标，云图不再按自动定位显示
-                if (WeatherReporter.hasManualCity(MainActivity.this)) {
-                    it.putExtra("lat", WeatherReporter.manualLat(MainActivity.this));
-                    it.putExtra("lng", WeatherReporter.manualLng(MainActivity.this));
-                } else {
-                    it.putExtra("lat", curLat);
-                    it.putExtra("lng", curLng);
-                }
-                startActivity(it);
-                overridePendingTransition(R.anim.rain_enter, R.anim.rain_exit);
-            }
+            public void onClick(View v) { openRainMap(); }
         });
 
         // 定时天气通知入口
@@ -454,7 +496,12 @@ public class MainActivity extends Activity {
                     top = insets.getSystemWindowInsetTop();
                     bottom = insets.getSystemWindowInsetBottom();
                 }
-                v.setPadding(dp(20), dp(14) + top, dp(20), dp(30) + bottom);
+                sysInsetBottom = bottom;
+                sysInsetTop = top;
+                // v10.1：开启悬浮底栏时，内容底部额外留出一栏高度，避免最后一张卡被压住
+                v.setPadding(dp(20), dp(14) + top, dp(20),
+                        dp(30) + bottom + (floatBarOn() ? dp(84) : 0));
+                updateFloatBarMargin();
                 return insets;
             }
         });
@@ -466,14 +513,14 @@ public class MainActivity extends Activity {
             feelsText.setShadowLayer(5f, 0f, 2f, 0x59000000);
         }
 
-        // 外观设置入口：毛玻璃透明度滑块
+        // 外观设置入口：外观与毛玻璃等选项集中在设置面板里（非独立滑块）
         final View gearBtn = findViewById(R.id.gearBtn);
         final TextView gearIcon = (TextView) findViewById(R.id.gearIcon);
         gearIcon.setTypeface(Fonts.icons());
         gearIcon.setText("\uE8B8");   // settings 齿轮
         gearBtn.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View v) { showSettingsDialog(); }
+            public void onClick(View v) { barGo(PAGE_SETTINGS); }
         });
 
         // v9.27：查询其他城市入口（放大镜）
@@ -514,11 +561,20 @@ public class MainActivity extends Activity {
                 findViewById(R.id.hourlyScroll),
                 findViewById(R.id.dailyList)
         };
+        roundGlassBtns = new View[]{findViewById(R.id.cityBtn),
+                findViewById(R.id.refreshBtn), findViewById(R.id.gearBtn)};
+        applyRoundGlassBtns();   // v10.1：顶栏三键 → 液态玻璃圆形
+        ensurePageLayer();       // v10.1：内嵌页容器（两种模式都建，降雨图才能复用 WebView）
+        applyFloatBar();   // v10.1：按开关恢复底部悬浮栏
         final android.view.View scrollRoot = findViewById(R.id.scrollRoot);
+        scrollRootView = scrollRoot;
         scrollRoot.getViewTreeObserver().addOnScrollChangedListener(
                 new android.view.ViewTreeObserver.OnScrollChangedListener() {
                     @Override
-                    public void onScrollChanged() { updateGlassPositions(); }
+                    public void onScrollChanged() {
+                        updateGlassPositions();
+                        handleBarScroll(scrollRoot);   // v10.1：上滑收起 / 下滑复现
+                    }
                 });
         // v9.70：首次启动弹自绘权限引导（定位/通知/自启动 一次授权，仅弹一次）；
         // 首次的权限请求统一由引导弹窗「一键授权」发起，避免系统框与引导框叠加。
@@ -632,7 +688,7 @@ public class MainActivity extends Activity {
                 Theme.setM3BgPath(this, f.getAbsolutePath());
                 applyUiInPlace();   // 立即应用到主界面
                 // v9.102.4：面板若还开着，就地重建刷新"已设置"状态
-                if (settingsDlg != null) showSettingsDialog("appearance", settingsDlg);
+                if (settingsPageOpen) showSettingsDialog("appearance", hostDialog());
                 Toast.makeText(this, "壁纸已应用", Toast.LENGTH_SHORT).show();
                 // v9.104.2：启动自绘裁剪界面（单指拖动/双指缩放/旋转，确认后写回壁纸）
                 startActivityForResult(new Intent(this, CropActivity.class), REQ_CROP);
@@ -643,7 +699,7 @@ public class MainActivity extends Activity {
             // v9.104.2：自绘裁剪返回——成功则裁剪结果已写回 m3_bg.jpg，直接刷新应用
             if (result == RESULT_OK) {
                 applyUiInPlace();   // 立即应用裁剪结果
-                if (settingsDlg != null) showSettingsDialog("appearance", settingsDlg);
+                if (settingsPageOpen) showSettingsDialog("appearance", hostDialog());
                 Toast.makeText(this, "壁纸已裁剪并应用", Toast.LENGTH_SHORT).show();
             } else {
                 Toast.makeText(this, "已取消裁剪，使用原图", Toast.LENGTH_SHORT).show();
@@ -655,6 +711,21 @@ public class MainActivity extends Activity {
                     ok ? "日志已导出" : "日志导出失败，可重试",
                     Toast.LENGTH_LONG).show();
         }
+    }
+
+    /** v10.1：返回键优先收起降雨图内嵌页，其次交给系统 */
+    @Override
+    public void onBackPressed() {
+        if (settingsPageOpen) {
+            if (settingsInDetail && settingsListPage != null && settingsDetailPage != null) {
+                handleSettingsBack(hostDialog(), settingsListPage, settingsDetailPage);
+            } else {
+                settingsOutTo(pageBeforeSettings);   // 回到打开设置前所在的内容页
+            }
+            return;
+        }
+        if (currentPage == PAGE_RAIN) { switchContentPage(PAGE_HOME); return; }
+        super.onBackPressed();
     }
 
     @Override
@@ -680,13 +751,105 @@ public class MainActivity extends Activity {
             // v9.81：用户在弹窗里点了「测试推送」后被拦去授权，授予后自动补发
             if (granted && pendingTestPush) {
                 pendingTestPush = false;
-                Toast.makeText(this, "正在推送天气通知…", Toast.LENGTH_SHORT).show();
-                Intent svc1 = new Intent(this, SpeakService.class);
-                if (Build.VERSION.SDK_INT >= 26) startForegroundService(svc1);
-                else startService(svc1);
+                pushReportNow();
             }
         }
         refreshPermStates();   // v9.73：授权结果返回后立即刷新引导弹窗状态行
+    }
+
+    /**
+     * v10.1：立即推送一次天气简报（「测试推送」/ 授权返回后自动补发共用）。
+     * 直接在子线程里完成拉取与通知，**不再启动前台服务**——前台启动服务虽然合法，
+     * 但会多出一条占位通知与 5 秒窗口，没必要。
+     */
+    private void pushReportNow() {
+        Toast.makeText(this, "正在推送天气通知…", Toast.LENGTH_SHORT).show();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                final boolean ok = ReportRunner.run(MainActivity.this);
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Toast.makeText(MainActivity.this,
+                                ok ? "已推送天气简报" : "推送失败，请检查网络后重试",
+                                Toast.LENGTH_SHORT).show();
+                        refreshReportCard();
+                    }
+                });
+            }
+        }).start();
+    }
+
+    /**
+     * v10.1：把「定时提醒到底有没有在工作」摊开给用户看——最近一次成功推送时间、
+     * 今日是否已推送、精确闹钟权限状态。旧版这些信息只存在于 logcat，
+     * 用户无从判断（这也是「设置看着是开的、通知就是不来」难以自查的原因）。
+     */
+    private void refreshReportHint(Dialog d) {
+        TextView hint = (TextView) d.findViewById(R.id.reportHint);
+        if (hint == null) return;
+        long ok = WeatherReporter.lastOkTs(this);
+        StringBuilder sb = new StringBuilder();
+        sb.append("上次成功推送：");
+        sb.append(ok <= 0 ? "尚无记录"
+                : new java.text.SimpleDateFormat("MM-dd HH:mm", Locale.US)
+                        .format(new java.util.Date(ok)));
+        if (WeatherReporter.enabled(this)) {
+            sb.append(WeatherReporter.reportedToday(this) ? "（今日已推送）" : "（今日尚未推送）");
+        }
+        if (Build.VERSION.SDK_INT >= 31 && !WeatherReporter.canExactAlarms(this)) {
+            sb.append("\n⚠ 未开启「闹钟与提醒」权限：推送时刻会被系统推迟，点此行开启");
+            hint.setTextColor(0xFFF2A65A);
+            hint.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) { openExactAlarmSettings(); }
+            });
+        } else {
+            sb.append("\n通知权限用于天气推送；自启动需在系统设置中允许本应用，重启手机后仍能准点推送。");
+        }
+        hint.setText(sb.toString());
+    }
+
+    /** v10.1：跳系统「闹钟与提醒」权限页（Android 12+，精确闹钟必需） */
+    private void openExactAlarmSettings() {
+        if (Build.VERSION.SDK_INT < 31) return;
+        try {
+            startActivity(new Intent(
+                    android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                    Uri.parse("package:" + getPackageName())));
+        } catch (Exception e) {
+            Toast.makeText(this, "请到 系统设置 → 应用 → 简洁天气 → 闹钟与提醒 中开启",
+                    Toast.LENGTH_LONG).show();
+        }
+    }
+
+    /**
+     * v10.1：开启定时提醒时校验「通知是否真的能送达」。
+     * 两种失败：① 通知被系统整体关闭；② Android 13+ 未授予 POST_NOTIFICATIONS。
+     * 旧版只写 Diag 日志，用户完全无感。
+     */
+    private void ensureNotifUsable() {
+        android.app.NotificationManager nm =
+                (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (nm != null && !nm.areNotificationsEnabled()) {
+            Toast.makeText(this, "系统通知已关闭，定时提醒无法送达；请允许本应用发送通知",
+                    Toast.LENGTH_LONG).show();
+            try {
+                Intent i = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                i.putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName());
+                startActivity(i);
+            } catch (Exception ignored) { }
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission("android.permission.POST_NOTIFICATIONS")
+                != PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this, "请允许通知权限，否则定时提醒不会显示",
+                    Toast.LENGTH_LONG).show();
+            requestPermissions(
+                    new String[]{"android.permission.POST_NOTIFICATIONS"}, REQ_NOTIF);
+        }
     }
 
     // ============ 定时天气通知设置弹窗 ============
@@ -785,17 +948,14 @@ public class MainActivity extends Activity {
                             "android.permission.POST_NOTIFICATIONS"}, REQ_NOTIF);
                     return;
                 }
-                Toast.makeText(MainActivity.this, "正在推送天气通知…", Toast.LENGTH_SHORT).show();
-                Intent svc = new Intent(MainActivity.this, SpeakService.class);
-                if (Build.VERSION.SDK_INT >= 26) startForegroundService(svc);
-                else startService(svc);
+                pushReportNow();
             }
         });
 
         d.findViewById(R.id.btnAutoStart).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                d.dismiss();
+                closeSettingsPanel(d, 1);
                 openAutoStartSettings();
             }
         });
@@ -1680,6 +1840,7 @@ public class MainActivity extends Activity {
         b.setTypeface(b.getTypeface(), android.graphics.Typeface.BOLD);
         b.setTextColor(textColor);
         b.setPadding(dp(14), dp(11), dp(14), dp(11));
+        b.setMinimumHeight(dp(48));   // v10.1：文本按钮统一 48dp 触控高度
         GradientDrawable g = new GradientDrawable();
         g.setColor(fill);
         g.setCornerRadius(dp(12));
@@ -1784,7 +1945,10 @@ public class MainActivity extends Activity {
         prevBtn.setTypeface(Fonts.icons());
         prevBtn.setText("\uE5CB");
         prevBtn.setTextSize(20f);
-        prevBtn.setPadding(dp(20), dp(2), dp(20), dp(2));
+        prevBtn.setGravity(Gravity.CENTER);
+        prevBtn.setMinimumHeight(dp(48));   // v10.1：触控高度 48dp（原约 34dp）
+        prevBtn.setPadding(dp(20), 0, dp(20), 0);
+        prevBtn.setContentDescription("上一页");
         final TextView pageLabel = new TextView(this);
         pageLabel.setTextColor(subColor);
         pageLabel.setTextSize(13f);
@@ -1792,7 +1956,10 @@ public class MainActivity extends Activity {
         nextBtn.setTypeface(Fonts.icons());
         nextBtn.setText("\uE5CC");
         nextBtn.setTextSize(20f);
-        nextBtn.setPadding(dp(20), dp(2), dp(20), dp(2));
+        nextBtn.setGravity(Gravity.CENTER);
+        nextBtn.setMinimumHeight(dp(48));   // v10.1：触控高度 48dp
+        nextBtn.setPadding(dp(20), 0, dp(20), 0);
+        nextBtn.setContentDescription("下一页");
         pageRow.addView(prevBtn);
         pageRow.addView(pageLabel);
         pageRow.addView(nextBtn);
@@ -3856,7 +4023,7 @@ public class MainActivity extends Activity {
 
     /** v9.97：主界面风格切换——就地切换，不 recreate、面板保持当前页 */
     private void pickHomeStyle(String s, Dialog d) {
-        if (s.equals(homeStyle())) { d.dismiss(); return; }
+        if (s.equals(homeStyle())) { closeSettingsPanel(d, 1); return; }
         getSharedPreferences("ui_pref", MODE_PRIVATE).edit().putString("home_style", s).apply();
         applyUiInPlace();
         showSettingsDialog("appearance", d);
@@ -3934,6 +4101,9 @@ public class MainActivity extends Activity {
             gd.setAlpha(alpha);
             card.setBackground(gd);
         }
+        // v10.1：悬浮栏与顶栏圆形按钮同样跟随背景快照
+        if (floatBarOn()) applyFloatBarBg();
+        applyRoundGlassBtns();
     }
 
     /** v9.78：自绘 M3 时间选择器回调 */
@@ -4086,19 +4256,14 @@ public class MainActivity extends Activity {
 
     /** v9.97：reuse 非空时复用已有 Dialog 就地重建面板——UI 主题/风格切换不关闭面板、不返回主界面 */
     private void showSettingsDialog(final String openDetail, final Dialog reuse) {
-        // v9.94：非浮动窗口主题——浮动窗口不绘制状态栏区域，导致顶部一直透出主界面
+        // v10.2（重写）：设置页不再是独立对话框窗口，而是与主页/降雨图**同窗口的内嵌页**
+        // （挂进 settingsPage 容器）。好处：底栏天然压在其上、可直接点；三页共用同一套
+        // 「页面带」转场；不再有窗口动画与视图动画打架导致的退出方向/效果异常。
+        // 参数沿用旧签名：reuse 非空即"面板已打开时就地重建"。
         final boolean dark = Theme.isDark(this);
-        final Dialog d = reuse != null ? reuse : new Dialog(this,
-                dark ? R.style.SettingsSheetTheme : R.style.SettingsSheetThemeLight);
-        // v9.102.4：记录面板引用（壁纸选图返回后刷新状态），关闭时清空
+        final Dialog d = hostDialog();          // 仅作内部构建代码的签名载体，从不 show
         settingsDlg = d;
-        d.setOnDismissListener(new DialogInterface.OnDismissListener() {
-            @Override public void onDismiss(DialogInterface di) {
-                if (settingsDlg == d) settingsDlg = null;
-            }
-        });
-        // v9.99：requestFeature 只能在首次添加 content 前调用——复用已 show 的 Dialog 时跳过，否则崩溃
-        if (reuse == null) d.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        final boolean rebuild = settingsPageOpen;
         // v9.99.1：平滑换色——复用面板前先抓旧画面快照，替换后淡出露出新面板
         final android.graphics.Bitmap[] fadeBmp = new android.graphics.Bitmap[1];
         if (reuse != null && d.getWindow() != null) {
@@ -4152,7 +4317,7 @@ public class MainActivity extends Activity {
         done.setBackground(doneBg);
         done.setPadding(dp(16), dp(6), dp(16), dp(6));
         done.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { d.dismiss(); }
+            @Override public void onClick(View v) { closeSettingsPanel(d, 1); }
         });
         header.addView(done);
         listPage.addView(header);
@@ -4200,43 +4365,15 @@ public class MainActivity extends Activity {
         root.addView(listPage);
         root.addView(detailPage);
 
-        d.setContentView(root);
-        Fonts.apply(root);
-
+        // v10.2：内容不再交给对话框窗口（面板是内嵌页），在方法末尾挂进 settingsPage；
+        // 曾经这里残留的 d.setContentView(root) 会让 root 先有父视图，
+        // 随后 addView 到容器时抛 "The specified child already has a parent"
         // v9.87.4：全屏设置面板——主题底色铺满全屏（含状态栏与底部手势条区域）
         GradientDrawable sheetBg = new GradientDrawable();
         sheetBg.setColor(bg);
         root.setBackground(sheetBg);
 
-        if (d.getWindow() != null) {
-            Window w = d.getWindow();
-            // v9.93：窗口背景直接铺主题底色——状态栏/手势条区域随窗口内容延伸，不再透出主界面
-            w.setBackgroundDrawable(new ColorDrawable(bg));
-            w.setDimAmount(0f);                         // 全屏面板，无需压暗主界面
-            w.setWindowAnimations(R.style.SettingsSheetAnim);   // 底部滑入/滑出动效
-            w.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
-            // v9.87.1：窗口延伸到系统栏之后，insets 才能回传给 root 做避让；
-            // 状态栏/手势条区域由窗口背景（主题底色）铺满，图标深浅随主题
-            int vis = View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    | View.SYSTEM_UI_FLAG_LAYOUT_STABLE;
-            if (Build.VERSION.SDK_INT >= 23 && !Theme.isDark(this)) {
-                vis |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;     // 浅色主题：状态栏深色图标
-            }
-            if (Build.VERSION.SDK_INT >= 26 && !Theme.isDark(this)) {
-                vis |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR; // 浅色主题：手势条深色
-            }
-            w.getDecorView().setSystemUiVisibility(vis);
-            if (Build.VERSION.SDK_INT >= 30) {
-                w.setDecorFitsSystemWindows(false);
-            }
-            w.setStatusBarColor(bg);                    // 兜底：系统栏颜色 = 主题底色
-            w.setNavigationBarColor(bg);
-            WindowManager.LayoutParams lp = w.getAttributes();
-            lp.width = WindowManager.LayoutParams.MATCH_PARENT;
-            lp.height = WindowManager.LayoutParams.MATCH_PARENT;  // v9.87.4：全屏
-            lp.gravity = Gravity.BOTTOM;
-            w.setAttributes(lp);
-        }
+        // v10.2：不再操作对话框窗口（无窗口动画、无系统栏调整）
         root.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
             @Override
             public WindowInsets onApplyWindowInsets(View v, WindowInsets insets) {
@@ -4259,51 +4396,30 @@ public class MainActivity extends Activity {
                 }
                 // v9.97：listPage/detailPage 全屏覆盖（含状态栏/手势条区域），方框展开才能铺满全屏；
                 // insets 避让改由两页各自 padding 承担，root 不再留边
-                int padL = dp(20), padT = top + dp(14), padR = dp(20), padB = bottom + dp(18);
+                // v10.1：悬浮底栏模式下底栏就在本窗口底部，内容底部留出「栏高 + 底边距 + 手势条」
+                int padL = dp(20), padT = top + dp(14), padR = dp(20),
+                        padB = floatBarOn() ? barAreaPx() : bottom + dp(18);
                 listPage.setPadding(padL, padT, padR, padB);
                 detailPage.setPadding(padL, padT, padR, padB);
                 return insets;
             }
         });
 
-        // 返回键：二级页动画返回一级，一级页关闭
-        d.setCancelable(false);
-        d.setCanceledOnTouchOutside(false);
+        // v10.2：返回键交给 Activity 统一处理（onBackPressed → 二级页/关闭/退页）
         settingsInDetail = false;
-        d.setOnKeyListener(new DialogInterface.OnKeyListener() {
-            @Override
-            public boolean onKey(DialogInterface di, int keyCode, KeyEvent event) {
-                if (keyCode == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_UP) {
-                    handleSettingsBack(d, listPage, detailPage);
-                    return true;
-                }
-                return false;
-            }
-        });
+        settingsListPage = listPage;
+        settingsDetailPage = detailPage;
 
-        if (reuse == null) {
-            d.show();
-        } else {
-            // v9.99.1：平滑换色——旧面板快照淡出（300ms）露出新面板，新面板同步淡入
-            if (fadeBmp[0] != null && d.getWindow() != null) {
-                final android.widget.ImageView fv = new android.widget.ImageView(this);
-                fv.setImageBitmap(fadeBmp[0]);
-                fv.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-                ((ViewGroup) d.getWindow().getDecorView()).addView(fv);
-                fv.animate().alpha(0f).setDuration(300)
-                        .setInterpolator(new android.view.animation.DecelerateInterpolator())
-                        .withEndAction(new Runnable() {
-                            @Override public void run() {
-                                ViewGroup p = (ViewGroup) fv.getParent();
-                                if (p != null) p.removeView(fv);
-                                if (fadeBmp[0] != null) { fadeBmp[0].recycle(); fadeBmp[0] = null; }
-                            }
-                        }).start();
-            }
-            root.setAlpha(0f);
-            root.animate().alpha(1f).setDuration(220).start();
-        }
+        // v10.2：挂进内嵌页容器 —— 与主页/降雨图同窗口，底栏在其上层
+        ensurePageLayer();
+        if (settingsPage == null) return;
+        settingsPage.removeAllViews();
+        settingsPage.addView(root, new android.widget.FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        Fonts.apply(root);
+        settingsRoot = root;
+        settingsPage.requestApplyInsets();   // 重新分发 insets，底部按底栏高度留白
+        openSettingsPage(rebuild);
 
         // v9.95：主题/风格切换后重开面板——直接进入对应二级页（从点击处再次方框展开）
         if (openDetail != null) {
@@ -4312,7 +4428,7 @@ public class MainActivity extends Activity {
                 @Override public void run() {
                     if ("appearance".equals(od)) {
                         openSettingsDetail(dark, listPage, detailPage, "外观",
-                                buildAppearancePage(dark, d, null), reuse == null);
+                                buildAppearancePage(dark, d, null), !rebuild);
                     }
                 }
             });
@@ -4346,6 +4462,8 @@ public class MainActivity extends Activity {
         t.setText(title);
         t.setTextSize(15);
         t.setTextColor(Theme.textPrimary(this));
+        t.setMaxLines(2);
+        t.setEllipsize(android.text.TextUtils.TruncateAt.END);
         col.addView(t);
 
         if (sub != null) {
@@ -4354,9 +4472,11 @@ public class MainActivity extends Activity {
             sv.setTextSize(11);
             sv.setTextColor(Theme.textSecondary(this));
             LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             slp.topMargin = dp(2);
             sv.setLayoutParams(slp);
+            sv.setMaxLines(3);
+            sv.setEllipsize(android.text.TextUtils.TruncateAt.END);
             col.addView(sv);
         }
         row.addView(col);
@@ -4771,12 +4891,16 @@ public class MainActivity extends Activity {
             s.setText(sub);
             s.setTextSize(12);
             s.setTextColor((accent & 0x00FFFFFF) | 0xC2000000);
+            // v10.1：宽度必须是 MATCH_PARENT —— 原来用 WRAP_CONTENT，在横向分页容器里
+            // （测量宽度不受约束）长说明不会换行，会横向溢出压到相邻内容上（表现就是"说明与按钮重叠"）
             LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             slp.topMargin = dp(4);
             slp.leftMargin = dp(8);
             slp.rightMargin = dp(8);
             s.setLayoutParams(slp);
+            s.setMaxLines(3);
+            s.setEllipsize(android.text.TextUtils.TruncateAt.END);
             parent.addView(s);
         }
     }
@@ -4810,6 +4934,8 @@ public class MainActivity extends Activity {
         t.setText(title);
         t.setTextSize(15);
         t.setTextColor(Theme.textPrimary(this));
+        t.setMaxLines(2);
+        t.setEllipsize(android.text.TextUtils.TruncateAt.END);
         col.addView(t);
 
         if (sub != null) {
@@ -4817,10 +4943,14 @@ public class MainActivity extends Activity {
             s.setText(sub);
             s.setTextSize(11);
             s.setTextColor(Theme.textSecondary(this));
+            // v10.1：副标题必须约束到列宽内 —— 原来用 WRAP_CONTENT，长句在某些测量路径下
+            // 不换行、横向溢出压到右侧控件上（外观页「悬浮底栏」两项就是这么被发现重叠的）
             LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             slp.topMargin = dp(2);
             s.setLayoutParams(slp);
+            s.setMaxLines(3);
+            s.setEllipsize(android.text.TextUtils.TruncateAt.END);
             col.addView(s);
         }
         row.addView(col);
@@ -4914,6 +5044,8 @@ public class MainActivity extends Activity {
         t.setText(title);
         t.setTextSize(15);
         t.setTextColor(Theme.textPrimary(this));
+        t.setMaxLines(2);
+        t.setEllipsize(android.text.TextUtils.TruncateAt.END);
         col.addView(t);
 
         if (sub != null) {
@@ -4921,13 +5053,21 @@ public class MainActivity extends Activity {
             s.setText(sub);
             s.setTextSize(11);
             s.setTextColor(Theme.textSecondary(this));
+            // v10.1：副标题必须约束到列宽内 —— 原来用 WRAP_CONTENT，长句在某些测量路径下
+            // 不换行、横向溢出压到右侧控件上（外观页「悬浮底栏」两项就是这么被发现重叠的）
             LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             slp.topMargin = dp(2);
             s.setLayoutParams(slp);
+            s.setMaxLines(3);
+            s.setEllipsize(android.text.TextUtils.TruncateAt.END);
             col.addView(s);
         }
         row.addView(col);
+        // v10.1：开关给定尺寸并留左侧空档 —— 文字与开关之间始终有 14dp 间隙
+        LinearLayout.LayoutParams swlp = new LinearLayout.LayoutParams(dp(52), dp(32));
+        swlp.leftMargin = dp(14);
+        sw.setLayoutParams(swlp);
         row.addView(sw);
         parent.addView(row);
     }
@@ -5008,6 +5148,7 @@ public class MainActivity extends Activity {
         // v9.88.5：预警低饱和显示开关（引擎已收敛为经典 Java View）
         stSection(page, "预警显示", "开启后预警提示使用低饱和柔和配色", dark);
         final M3Switch muteSw = new M3Switch(this);
+        muteSw.setContentDescription("预警通知静音");
         muteSw.setChecked(Theme.alertMuted(this));
         muteSw.setOnCheckedChangeListener(new M3Switch.OnCheckedChangeListener() {
             @Override public void onCheckedChanged(M3Switch b, boolean on) {
@@ -5019,12 +5160,51 @@ public class MainActivity extends Activity {
         stSwitchRow(alertCard, R.drawable.ic_set_palette, "预警信息低饱和显示", "红/橙/黄/蓝等级色替换为低饱和柔和色", dark, muteSw);
         page.addView(alertCard);
 
+        // v10.1：悬浮底栏（可选）+ 液态玻璃质感
+        stSection(page, "悬浮底栏", "入口收到底部悬浮栏，底部可切页；上滑收起、下滑复现", dark);
+        LinearLayout barCard = stCard(dark);
+        final M3Switch barSw = new M3Switch(this);
+        barSw.setContentDescription("悬浮底栏");
+        barSw.setChecked(floatBarOn());
+        stSwitchRow(barCard, R.drawable.ic_set_palette, "启用悬浮底栏",
+                "入口移到屏幕底部；上滑收起、下滑复现", dark, barSw);
+        barCard.addView(stDivider(dark));
+        final M3Switch liqSw = new M3Switch(this);
+        liqSw.setContentDescription("液态玻璃底栏");
+        liqSw.setChecked(liquidGlassOn());
+        stSwitchRow(barCard, R.drawable.ic_set_light, "液态玻璃质感",
+                "底栏用背景模糊的玻璃，取色跟随所在页面", dark, liqSw);
+        liqSw.setEnabled(floatBarOn());
+        liqSw.setAlpha(floatBarOn() ? 1f : 0.4f);
+        barSw.setOnCheckedChangeListener(new M3Switch.OnCheckedChangeListener() {
+            @Override public void onCheckedChanged(M3Switch b, boolean on) {
+                getSharedPreferences("ui_pref", MODE_PRIVATE).edit()
+                        .putBoolean("float_bar", on).apply();
+                applyFloatBar();
+                Toast.makeText(MainActivity.this,
+                        on ? "已开启悬浮底栏" : "已关闭悬浮底栏",
+                        Toast.LENGTH_SHORT).show();
+                showSettingsDialog("appearance", d);   // 面板就地重建，刷新玻璃开关可用态
+            }
+        });
+        liqSw.setOnCheckedChangeListener(new M3Switch.OnCheckedChangeListener() {
+            @Override public void onCheckedChanged(M3Switch b, boolean on) {
+                getSharedPreferences("ui_pref", MODE_PRIVATE).edit()
+                        .putBoolean("liquid_bar", on).apply();
+                applyFloatBar();
+                Toast.makeText(MainActivity.this,
+                        on ? "底栏已改为液态玻璃质感" : "底栏已改为纯色面板",
+                        Toast.LENGTH_SHORT).show();
+            }
+        });
+        page.addView(barCard);
+
         return page;
     }
 
     /** v9.97：UI 切换仿 NeriPlayer——就地换色，不 recreate、不返回主界面、面板保持当前页 */
     private void pickTheme(String m, Dialog d) {
-        if (m.equals(Theme.mode(this))) { d.dismiss(); return; }
+        if (m.equals(Theme.mode(this))) { closeSettingsPanel(d, 1); return; }
         Theme.setMode(this, m);
         applyUiInPlace();                    // 主界面原地换色
         showSettingsDialog("appearance", d); // 面板就地重建（保持外观二级页）
@@ -5082,9 +5262,10 @@ public class MainActivity extends Activity {
         stSection(page, "后台与推送", null, dark);
 
         final M3Switch alertSw = new M3Switch(this);
+        alertSw.setContentDescription("后台预警监控");
         alertSw.setChecked(AlertWatcher.enabled(this));
         LinearLayout bgCard = stCard(dark);
-        stSwitchRow(bgCard, R.drawable.ic_set_bell, "后台预警监控", "每 30 分钟检查，黄色及以上自动提醒", dark, alertSw);
+        stSwitchRow(bgCard, R.drawable.ic_set_bell, "后台预警监控", "随 15 分钟后台心跳检查，黄色及以上自动提醒", dark, alertSw);
         page.addView(bgCard);
         alertSw.setOnCheckedChangeListener(new M3Switch.OnCheckedChangeListener() {
             @Override public void onCheckedChanged(M3Switch sw, boolean on) {
@@ -5165,6 +5346,7 @@ public class MainActivity extends Activity {
         page.setOrientation(LinearLayout.VERTICAL);
         stSection(page, "诊断日志", "统一写入单个日志文件", dark);
         final M3Switch logSw = new M3Switch(this);
+        logSw.setContentDescription("写入诊断日志");
         logSw.setChecked(LogFile.enabled());
         LinearLayout logCard = stCard(dark);
         stSwitchRow(logCard, R.drawable.ic_set_log, "写入日志", "关闭后不再生成 / 追加日志", dark, logSw);
@@ -5225,6 +5407,7 @@ public class MainActivity extends Activity {
                 "当前气温 / 湿度 / 紫外线指数超过阈值时推送提醒，留空表示不启用该项", dark);
 
         final M3Switch sw = new M3Switch(this);
+        sw.setContentDescription("自定义气象提醒");
         sw.setChecked(CustomAlert.enabled(this));
         LinearLayout caCard = stCard(dark);
         stSwitchRow(caCard, R.drawable.ic_set_bell, "开启提醒", "天气刷新后自动检查当前实况", dark, sw);
@@ -5472,6 +5655,666 @@ public class MainActivity extends Activity {
     }
 
     /** 滚动/布局变化时更新玻璃裁切位置（无需重建位图） */
+    // ==================== v10.1：底部悬浮栏 ====================
+
+    /**
+     * v10.1：按底栏相对位置切页 —— 目标页在当前位置**右侧**则自右滑入、旧页向左让位；
+     * 在**左侧**则自左滑入、旧页向右让位。设置是整页浮层（最右），故自右入、
+     * 回到左侧页面时向左滑出。
+     */
+    /**
+     * v10.2：按底栏位置切页。方向与格数都由「目标索引 vs 当前页索引」决定：
+     * 目标在右 → 新页自右滑入、旧页向左让出；在左则整体反向。
+     * 设置页在索引 2（最右），从主页过去跨 2 格、从降雨图过去跨 1 格。
+     */
+    private void barGo(int target) {
+        if (target == PAGE_SETTINGS) {
+            // v10.2 fix：必须走 showSettingsDialog（它负责构建面板内容），
+            // 直接调 openSettingsPage() 只会滑入一个空容器 —— 表现就是"设置页不显示"
+            if (!settingsPageOpen) showSettingsDialog(null, null);
+            return;
+        }
+        if (settingsPageOpen) { settingsOutTo(target); return; }
+        if (target == currentPage) {
+            if (target == PAGE_HOME) scrollHomeTop();
+            return;
+        }
+        switchContentPage(target);
+    }
+
+    /** 「主页」键一步到位：收起设置页与降雨图，回到主页（已在主页则滚回顶部） */
+    private void barGoHome() {
+        if (settingsPageOpen) { settingsOutTo(PAGE_HOME); return; }
+        if (currentPage != PAGE_HOME) { switchContentPage(PAGE_HOME); return; }
+        scrollHomeTop();
+        updateBarSelection();
+    }
+
+    private void scrollHomeTop() {
+        if (scrollRootView instanceof android.widget.ScrollView) {
+            ((android.widget.ScrollView) scrollRootView).smoothScrollTo(0, 0);
+        }
+    }
+
+    /**
+     * v10.1：打开降雨图内嵌页（仅悬浮底栏模式）。自右侧滑入，同时主页内容向左让位，
+     * 形成「按底栏顺序横移」的观感；底栏始终浮在最上层，可直接切到别的页。
+     */
+    // ==================== v10.2：三页统一「页面带」转场 ====================
+    // 主页(0) / 降雨图(1) / 设置(2) 同处一个窗口，每次切页把各页各自平移到目标位置；
+    // 动画被打断时直接重新指向，因此可以连续、快速来回切换。
+    // 方向规则：目标相对当前位置在右 → 新页自右滑入、旧页向左让出；在左则整体反向。
+    // 位移按格数：主页↔设置 2 格、降雨图↔设置 1 格、主页↔降雨图 1 格。
+
+    private int pageW() {
+        return Math.max(rootFrame != null ? rootFrame.getWidth() : 0, 1);
+    }
+
+    private View pageViewOf(int index) {
+        if (index == PAGE_HOME) return scrollRootView;
+        if (index == PAGE_RAIN) return pageLayer;
+        return settingsPage;
+    }
+
+    /** v10.2：设置页宿主对话框 —— 仅用于沿用内部构建代码的签名，从不 show */
+    private Dialog hostDialog() {
+        if (hostDialog == null) {
+            hostDialog = new Dialog(this, R.style.SettingsSheetTheme);
+        }
+        return hostDialog;
+    }
+
+    /**
+     * v10.2：确保内嵌页容器（降雨图）与设置页容器存在，并维持「内嵌页 → 设置页 → 底栏」的层次。
+     * 非底栏模式同样需要：降雨图统一以内嵌页承载，WebView 只创建一次，反复进出不再重新加载。
+     */
+    private void ensurePageLayer() {
+        if (!(rootFrame instanceof ViewGroup)) return;
+        ViewGroup root = (ViewGroup) rootFrame;
+        if (pageLayer == null) {
+            pageLayer = new android.widget.FrameLayout(this);
+            pageLayer.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            pageLayer.setVisibility(View.INVISIBLE);
+        }
+        if (pageLayer.getParent() != root) root.addView(pageLayer);
+        if (settingsPage == null) {
+            settingsPage = new android.widget.FrameLayout(this);
+            settingsPage.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            settingsPage.setVisibility(View.INVISIBLE);
+        }
+        if (settingsPage.getParent() != root) root.addView(settingsPage);
+        if (floatBar != null && floatBar.getParent() == root) {   // 底栏始终最上层
+            root.removeView(floatBar);
+            root.addView(floatBar);
+        }
+    }
+
+    /** 读取某页**实时位置**（无则 0） */
+    private float pageX(int index) {
+        View v = pageViewOf(index);
+        return v == null ? 0f : v.getTranslationX();
+    }
+
+    /** 依实时位置定入场方向：目标页在右 → +1（旧页向左让出、新页自右滑入） */
+    private int dirBetween(int from, int target) {
+        return pageX(target) >= pageX(from) ? 1 : -1;
+    }
+
+    /** 依实时位置算位移格数（钳制 1~2 格，避免极端值） */
+    private int spanBetween(int from, int target) {
+        int span = Math.round(Math.abs(pageX(target) - pageX(from)) / pageW());
+        return Math.max(1, Math.min(2, span));
+    }
+
+    // ===== 每页各自的入场效果（位移之外），让三页动效各有性格 =====
+    // 主页：纯横移；降雨图：横移 + 淡入；设置：横移 + 更强淡入 + 轻微上浮
+    private float enterAlpha(int index) {
+        if (index == PAGE_SETTINGS) return 0.6f;
+        if (index == PAGE_RAIN) return 0.85f;
+        return 1f;
+    }
+
+    private int enterLiftPx(int index) {
+        return index == PAGE_SETTINGS ? dp(22) : 0;
+    }
+
+    /** 让某页自 fromX 处滑入到 0（含该页自己的淡入/上浮） */
+    private void slidePageIn(int index, float fromX) {
+        final View v = pageViewOf(index);
+        if (v == null) return;
+        v.animate().cancel();
+        v.setVisibility(View.VISIBLE);
+        v.setTranslationX(fromX);
+        v.setAlpha(enterAlpha(index));
+        v.setTranslationY(enterLiftPx(index));
+        v.animate().translationX(0f).alpha(1f).translationY(0f)
+                .setDuration(PAGE_MS).setInterpolator(pageEase()).start();
+    }
+
+    /**
+     * 把不参与本次转场的页摆回它应在的位置 —— 这样下一次"读实时位置"才是准的
+     * （三页相对位置因此始终自洽，不需要任何写死的方向判断）。
+     */
+    private void parkIdlePages(int target, int prev) {
+        final int w = pageW();
+        int[] all = {PAGE_HOME, PAGE_RAIN};      // 设置页由各自转场的收尾处理
+        for (int i : all) {
+            if (i == target || i == prev) continue;
+            View v = pageViewOf(i);
+            if (v == null) continue;
+            float x;
+            if (i == PAGE_SETTINGS) {
+                x = settingsPageOpen ? 0f : (PAGE_SETTINGS - currentPage) * (float) w;
+            } else {
+                x = (i - currentPage) * (float) w;
+            }
+            v.animate().cancel();
+            v.setTranslationX(x);
+            v.setAlpha(1f);
+            v.setTranslationY(0f);
+            if (i != currentPage) v.setVisibility(View.INVISIBLE);
+        }
+    }
+
+    /** 切页收尾：底栏高亮 + 底栏取色 + 玻璃快照位置 */
+    private void afterPageChange() {
+        applyFloatBarBg();
+        updateBarSelection();
+        updateGlassPositions();
+    }
+
+    /** 内容页之间切换（主页 ↔ 降雨图） */
+    private void switchContentPage(int target) {
+        if (pageLayer == null || target == currentPage) return;
+        if (target == PAGE_RAIN) {
+            ensureRainPage();
+            if (rainPageFailed) return;      // 内嵌失败：已转独立页，不做转场
+        }
+        final int w = pageW();
+        final int dir = dirBetween(currentPage, target);      // ← 实时位置决定方向
+        final int span = spanBetween(currentPage, target);    // ← 实时位置决定格数
+        final int prev = currentPage;
+        final View out = pageViewOf(prev);
+        if (out == null) return;
+        slidePageIn(target, dir * span * (float) w);          // 新页从它所在的一侧进入
+        final View o = out;
+        o.animate().cancel();
+        o.animate().translationX(-dir * span * (float) w)
+                .setDuration(PAGE_MS).setInterpolator(pageEase())
+                .withEndAction(new Runnable() {
+                    @Override public void run() {
+                        if (currentPage != prev) o.setVisibility(View.INVISIBLE);
+                    }
+                }).start();
+        currentPage = target;
+        parkIdlePages(target, prev);
+        afterPageChange();
+    }
+
+    /** 打开设置页：自右侧按格数滑入，两个内容页整条左移（彼此相对位置保持不变） */
+    private void openSettingsPage(boolean rebuild) {
+        if (settingsPage == null) return;
+        final int w = pageW();
+        if (!settingsPageOpen) {
+            pageBeforeSettings = currentPage;
+            // 方向与格数都读**实时位置**：主页过来 2 格、降雨图过来 1 格
+            settingsEnterDir = dirBetween(pageBeforeSettings, PAGE_SETTINGS);
+            settingsSpan = Math.max(1, spanBetween(pageBeforeSettings, PAGE_SETTINGS));
+        }
+        settingsPageOpen = true;
+        // 面板自它所在的一侧滑入（含自己的淡入 + 轻微上浮）
+        slidePageIn(PAGE_SETTINGS, rebuild ? 0f : settingsEnterDir * settingsSpan * (float) w);
+        // 当前内容页只做轻微视差后撤 —— 不整条带走，保持"谁在谁右边"的关系不变
+        if (!rebuild) {
+            final View cur = pageViewOf(pageBeforeSettings);
+            if (cur != null) {
+                cur.animate().cancel();
+                cur.animate().translationX(-settingsEnterDir * w * 0.22f)
+                        .setDuration(PAGE_MS).setInterpolator(pageEase()).start();
+            }
+        }
+        parkIdlePages(PAGE_SETTINGS, pageBeforeSettings);
+        afterPageChange();
+    }
+
+    /** 收起设置并切到某个内容页：面板向右、目标页自对应侧入、原页反向让出，三段同时走 */
+    private void settingsOutTo(int target) {
+        if (!settingsPageOpen) {
+            if (target != currentPage) switchContentPage(target);
+            return;
+        }
+        final int w = pageW();
+        final int back = pageBeforeSettings;
+        settingsPageOpen = false;
+        currentPage = target;
+        // 面板按"开启时的格数"原路退出；方向 = 目标页所在侧的**反面**（即它自己那一侧）
+        final int exitDir = -dirBetween(PAGE_SETTINGS, target);
+        slideTo(settingsPage, exitDir * Math.max(1, settingsSpan) * (float) w, new Runnable() {
+            @Override public void run() {
+                if (!settingsPageOpen) {
+                    settingsPage.setVisibility(View.INVISIBLE);
+                    settingsPage.setTranslationX((PAGE_SETTINGS - currentPage) * (float) pageW());
+                    settingsPage.setAlpha(1f);
+                    settingsPage.setTranslationY(0f);
+                }
+            }
+        });
+        if (target != back) {
+            // 切到另一个内容页：方向/格数同样读**实时位置**
+            // （例：主页在左、降雨图在右 → 降雨图自右滑入）
+            final int dir = dirBetween(back, target);
+            final int span = spanBetween(back, target);
+            slidePageIn(target, dir * span * (float) w);
+            final View o = pageViewOf(back);
+            if (o != null) slideTo(o, -dir * span * (float) w, null);
+        } else {
+            // 回原页：从让位处滑回，并复位它自己的入场效果
+            final View v = pageViewOf(target);
+            if (v != null) {
+                v.animate().cancel();
+                v.setVisibility(View.VISIBLE);
+                v.animate().translationX(0f).alpha(1f).translationY(0f)
+                        .setDuration(PAGE_MS).setInterpolator(pageEase()).start();
+            }
+        }
+        parkIdlePages(target, back);
+        afterPageChange();
+    }
+
+    /** 创建/复用降雨图内嵌页（WebView 只建一次；仅坐标变化才重载） */
+    private void ensureRainPage() {
+        if (pageLayer == null || rainPage != null) {
+            if (rainPageRoot != null) rainPageRoot.setPadding(0, sysInsetTop, 0, barAreaPx());
+            reloadRainIfMoved();
+            return;
+        }
+        try {
+            View v = getLayoutInflater().inflate(R.layout.activity_rain_map, pageLayer, false);
+            rainPageRoot = v;
+            RainMapView.applyTheme(this, v);
+            pageLayer.addView(v, new android.widget.FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            final double rlat = WeatherReporter.hasManualCity(this)
+                    ? WeatherReporter.manualLat(this) : curLat;
+            final double rlng = WeatherReporter.hasManualCity(this)
+                    ? WeatherReporter.manualLng(this) : curLng;
+            v.setPadding(0, sysInsetTop, 0, barAreaPx());
+            rainPage = RainMapView.attach(this, v, rlat, rlng, new Runnable() {
+                @Override public void run() { barGoHome(); }
+            });
+            rainLat = rlat;
+            rainLng = rlng;
+            rainLoaded = true;
+        } catch (Throwable t) {
+            rainPageFailed = true;
+            startRainMapActivity();   // 内嵌失败则退回独立页面，保证功能可用
+        }
+    }
+
+    /** 坐标变了才重载 MSN 页面（反复进出不再重新加载） */
+    private void reloadRainIfMoved() {
+        if (!rainLoaded || rainPage == null) return;
+        final double clat = WeatherReporter.hasManualCity(this)
+                ? WeatherReporter.manualLat(this) : curLat;
+        final double clng = WeatherReporter.hasManualCity(this)
+                ? WeatherReporter.manualLng(this) : curLng;
+        if (Math.abs(clat - rainLat) > 1e-4 || Math.abs(clng - rainLng) > 1e-4) {
+            rainLat = clat;
+            rainLng = clng;
+            rainPage.load(clat, clng);
+        }
+    }
+
+    /** 关闭设置页（沿用旧调用点签名）：回到打开设置前所在的内容页 */
+    private void closeSettingsPanel(Dialog d, int dir) {
+        settingsOutTo(pageBeforeSettings);
+    }
+
+    /** 收起设置页（旧签名）：同上 */
+    private void dismissSettings(int dir) {
+        settingsOutTo(pageBeforeSettings);
+    }
+
+    /** 打开降雨图：统一走内嵌页（WebView 只创建一次，反复进出不再重新加载） */
+    private void openRainMap() {
+        if (rainPageFailed) { startRainMapActivity(); return; }
+        if (settingsPageOpen) { settingsOutTo(PAGE_RAIN); return; }
+        switchContentPage(PAGE_RAIN);
+    }
+
+    /** 兜底路径：内嵌页创建失败时才启用独立 Activity */
+    private void startRainMapActivity() {
+        Intent it = new Intent(MainActivity.this, RainMapActivity.class);
+        // v9.40：手动选择城市时传手动坐标，云图不再按自动定位显示
+        if (WeatherReporter.hasManualCity(MainActivity.this)) {
+            it.putExtra("lat", WeatherReporter.manualLat(MainActivity.this));
+            it.putExtra("lng", WeatherReporter.manualLng(MainActivity.this));
+        } else {
+            it.putExtra("lat", curLat);
+            it.putExtra("lng", curLng);
+        }
+        startActivity(it);
+        overridePendingTransition(R.anim.rain_enter, R.anim.rain_exit);
+    }
+
+    /** 悬浮底栏是否启用（外观设置里可开关，默认关闭） */
+    private boolean floatBarOn() {
+        return getSharedPreferences("ui_pref", MODE_PRIVATE).getBoolean("float_bar", false);
+    }
+
+    /** 悬浮底栏是否使用液态玻璃质感（默认开启；关闭则用半透明纯色面板） */
+    private boolean liquidGlassOn() {
+        return getSharedPreferences("ui_pref", MODE_PRIVATE).getBoolean("liquid_bar", true);
+    }
+
+    /** 构建底部悬浮胶囊（两个入口：降雨图 / 设置）。按需构建，只建一次。 */
+    private void buildFloatBar() {
+        if (floatBar != null || !(rootFrame instanceof ViewGroup)) return;
+        barIcons.clear();
+        barLabels.clear();
+        LinearLayout pill = new LinearLayout(this);
+        pill.setOrientation(LinearLayout.HORIZONTAL);
+        pill.setGravity(Gravity.CENTER);
+        pill.setPadding(dp(6), dp(4), dp(6), dp(4));
+        android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        lp.bottomMargin = dp(30) + sysInsetBottom;   // v10.1：抬高一些，离手势条更远、更好按
+        pill.setLayoutParams(lp);
+        pill.setElevation(dp(10));
+        pill.addView(barItem("\uE88A", "主页", new Runnable() {
+            @Override public void run() { barGoHome(); }
+        }));
+        pill.addView(barItem("\uE798", "降雨图", new Runnable() {
+            @Override public void run() { barGo(PAGE_RAIN); }
+        }));
+        pill.addView(barItem("\uE8B8", "设置", new Runnable() {
+            @Override public void run() { barGo(PAGE_SETTINGS); }
+        }));
+        // 内嵌页容器先确保存在、且在底栏之前 → 底栏永远压在内嵌页之上
+        ensurePageLayer();
+        ((ViewGroup) rootFrame).addView(pill);
+        floatBar = pill;
+    }
+
+    /** 底栏里的单个入口：图标 + 文字，触控区 ≥ 48dp，圆角水波反馈 */
+    private View barItem(final String glyph, final String label, final Runnable action) {
+        LinearLayout item = new LinearLayout(this);
+        item.setOrientation(LinearLayout.VERTICAL);
+        item.setGravity(Gravity.CENTER);
+        item.setMinimumWidth(dp(78));
+        item.setMinimumHeight(dp(52));
+        item.setPadding(dp(16), dp(6), dp(16), dp(6));
+        item.setClickable(true);
+        item.setFocusable(true);
+        item.setContentDescription(label);
+
+        TextView icon = new TextView(this);
+        icon.setTypeface(Fonts.icons());
+        icon.setText(glyph);
+        icon.setTextSize(22);
+        icon.setGravity(Gravity.CENTER);
+        item.addView(icon);
+
+        TextView text = new TextView(this);
+        text.setText(label);
+        text.setTextSize(11);
+        text.setGravity(Gravity.CENTER);
+        item.addView(text);
+        barIcons.add(icon);
+        barLabels.add(text);
+
+        // 圆角水波（按下即有反馈，与卡片风格一致）
+        GradientDrawable mask = new GradientDrawable();
+        mask.setCornerRadius(dp(20));
+        int[][] states = new int[][]{ new int[]{android.R.attr.state_pressed}, new int[]{} };
+        android.content.res.ColorStateList csl =
+                new android.content.res.ColorStateList(states, new int[]{0x33FFFFFF, 0x00000000});
+        item.setBackground(new android.graphics.drawable.RippleDrawable(csl, null, mask));
+
+        item.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showFloatBar();   // 点完保持可见，避免操作过程中栏位缩走
+                action.run();
+            }
+        });
+        return item;
+    }
+
+    /** 按开关应用悬浮栏：显隐 + 顶部齿轮/页面降雨图卡片让位 + 内容底部留白 */
+    private void applyFloatBar() {
+        boolean on = floatBarOn();
+        if (on) buildFloatBar();
+        if (floatBar != null) {
+            floatBar.setVisibility(on ? View.VISIBLE : View.GONE);
+            if (!on) {
+                barHidden = false;
+                floatBar.setTranslationY(0f);
+                floatBar.setAlpha(1f);
+            }
+        }
+        applyRoundGlassBtns();   // 底栏开关会改变齿轮可见性，这里同步重铺顶栏圆形玻璃
+        if (!on && rainPageRoot != null) {
+            // v10.2：关底栏只是不再显示它 —— 内嵌页（降雨图/设置）照常工作；
+            // 各页位置由转场各自维护，不再需要"收页 + 位移复位"那套补丁
+            rainPageRoot.setPadding(0, sysInsetTop, 0, barAreaPx());
+            if (settingsPage != null) settingsPage.requestApplyInsets();
+        }
+        View gear = findViewById(R.id.gearBtn);
+        if (gear != null) gear.setVisibility(on ? View.GONE : View.VISIBLE);
+        View map = findViewById(R.id.mapCard);
+        if (map != null) map.setVisibility(on ? View.GONE : (mapCardShown ? View.VISIBLE : View.GONE));
+        if (contentRoot != null) {   // 底部额外留白，避免最后一张卡被悬浮栏压住
+            contentRoot.setPadding(contentRoot.getPaddingLeft(), contentRoot.getPaddingTop(),
+                    contentRoot.getPaddingRight(),
+                    dp(30) + sysInsetBottom + (on ? dp(84) : 0));
+        }
+        updateFloatBarMargin();
+        if (on) {
+            applyFloatBarBg();
+            if (floatBar != null) {
+                floatBar.post(new Runnable() {
+                    @Override public void run() { updateGlassPositions(); }
+                });
+            }
+        }
+        updateBarSelection();
+    }
+
+    private Bitmap solidSnap;
+    private int solidSnapColor = 0;
+
+    /**
+     * v10.1：顶栏三个按钮（查询城市 / 刷新 / 设置）统一为**液态玻璃圆形**：
+     * 与卡片、底栏同一套做法 —— 背景模糊快照按窗口坐标裁切 + 顶部柔光 + 细描边；
+     * 极简模式（无渐变快照）退化为半透明圆片；水波反馈改挂 foreground（背景已被玻璃占用）。
+     */
+    private void applyRoundGlassBtns() {
+        if (roundGlassBtns == null) return;
+        int[] loc = new int[2];
+        for (View b : roundGlassBtns) {
+            // v10.2：不按可见性跳过 —— 悬浮底栏关闭后齿轮才由 GONE 变 VISIBLE，
+            // 若那时不重铺，它就会保持 XML 里的胶囊底（这正是"关掉底栏后设置键不是圆形玻璃"的原因）
+            if (b == null) continue;
+            if (materialHome || glassCache == null) {
+                GradientDrawable gd = new GradientDrawable();
+                gd.setShape(GradientDrawable.OVAL);
+                gd.setColor(0x1FFFFFFF);
+                b.setBackground(gd);
+            } else {
+                b.getLocationInWindow(loc);
+                int size = b.getWidth() > 0 ? b.getWidth() : dp(48);
+                GlassDrawable gd = new GlassDrawable(glassCache, loc[0], loc[1],
+                        size / 2f, 4, Theme.glassHighlight(this), Theme.glassBorder(this));
+                gd.setAlpha(Theme.glassAlpha(this));
+                b.setBackground(gd);
+            }
+            if (b.getForeground() == null) {
+                GradientDrawable mask = new GradientDrawable();
+                mask.setShape(GradientDrawable.OVAL);
+                b.setForeground(new android.graphics.drawable.RippleDrawable(
+                        android.content.res.ColorStateList.valueOf(0x33FFFFFF), null, mask));
+            }
+        }
+    }
+
+    /** v10.1：1×1 同色快照 —— 给纯色页面（极简模式 / 降雨图页）当玻璃底色用 */
+    private Bitmap solidSnapshot(int color) {
+        if (solidSnap == null || solidSnapColor != color) {
+            if (solidSnap != null) solidSnap.recycle();
+            solidSnap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
+            solidSnap.eraseColor(color);
+            solidSnapColor = color;
+        }
+        return solidSnap;
+    }
+
+    /** v10.1：底栏占据的高度 = 栏高 + 底边距 + 手势条 inset + 一点呼吸间隙 */
+    private int barAreaPx() {
+        if (!floatBarOn()) return sysInsetBottom;   // 无底栏：只避让手势条
+        int h = floatBar != null ? floatBar.getHeight() : dp(60);
+        if (h <= 0) h = dp(60);
+        return h + dp(30) + sysInsetBottom + dp(8);
+    }
+
+    /** 底栏底边距避让手势条（insets 变化时也会被调用） */
+    private void updateFloatBarMargin() {
+        if (floatBar == null) return;
+        ViewGroup.LayoutParams lp = floatBar.getLayoutParams();
+        if (lp instanceof android.widget.FrameLayout.LayoutParams) {
+            int m = dp(30) + sysInsetBottom;
+            if (((android.widget.FrameLayout.LayoutParams) lp).bottomMargin != m) {
+                ((android.widget.FrameLayout.LayoutParams) lp).bottomMargin = m;
+                floatBar.requestLayout();
+            }
+        }
+    }
+
+    /**
+     * v10.1：底栏样式。
+     * 液态玻璃 = 背景模糊快照（与页面卡片同一张快照，观感统一）+ 顶部柔光 + 底部内阴影 + 圆角描边，
+     * 再由 {@link LiquidBarDrawable#getOutline} 配合 elevation 投出悬浮阴影；
+     * 关闭时退化为半透明圆角面板。
+     */
+    private void applyFloatBarBg() {
+        if (floatBar == null) return;
+        boolean darkText = materialHome && m3BgActive && m3BgLight;
+        int cMain = darkText ? 0xFF16202B : 0xFFFFFFFF;
+        int cSub = darkText ? 0xB316202B : 0xB3FFFFFF;
+        for (TextView t : barIcons) t.setTextColor(cMain);
+        for (TextView t : barLabels) t.setTextColor(cSub);
+        updateBarSelection(false);   // 覆盖当前页的高亮色（整组重铺，不做过渡）
+
+        // v10.1：玻璃**始终保留质感**，只是"取色"跟随所在页面 ——
+        // 渐变主页用背景快照；极简模式 / 降雨图页这类纯色底则换一张 1×1 同色快照，
+        // 于是高光、描边、悬浮阴影、半透都在，颜色也不会跟背景打架。
+        // （此前这两处直接退化成纯色面板，表现为"切到降雨图后玻璃取色和效果都消失"）
+        Bitmap snap = glassCache;
+        if (materialHome || currentPage == PAGE_RAIN) {
+            snap = solidSnapshot(materialHome ? materialPalette(0)[0] : 0xFF111318);
+        }
+        if (liquidGlassOn() && snap != null) {
+            int[] loc = new int[2];
+            floatBar.getLocationInWindow(loc);
+            LiquidBarDrawable d = new LiquidBarDrawable(snap, loc[0], loc[1], dp(26), 4,
+                    Theme.glassHighlight(this), Theme.glassBorder(this));
+            d.setAlpha(Theme.glassAlpha(this));
+            floatBar.setBackground(d);
+        } else {
+            GradientDrawable gd = new GradientDrawable();
+            gd.setCornerRadius(dp(26));
+            gd.setColor(materialHome ? 0x1FFFFFFF : 0x33FFFFFF);
+            gd.setStroke(dp(1), darkText ? 0x14000000 : 0x40FFFFFF);
+            floatBar.setBackground(gd);
+        }
+        floatBar.setElevation(dp(10));
+    }
+
+    /**
+     * v10.1：底栏高亮当前页 —— 图标与文字用强调色，其余保持常规色，
+     * 让「现在在哪一页」一眼可见（设置面板打开时高亮「设置」）。
+     */
+    private void updateBarSelection() {
+        updateBarSelection(true);
+    }
+
+    /** @param animate 是否对颜色切换做过渡（切页时 true，一上来铺色时 false） */
+    private void updateBarSelection(boolean animate) {
+        if (barIcons.isEmpty()) return;
+        int sel = settingsPageOpen ? PAGE_SETTINGS : currentPage;
+        int accent = Theme.setAccent(this);
+        boolean darkText = materialHome && m3BgActive && m3BgLight;
+        int cMain = darkText ? 0xFF16202B : 0xFFFFFFFF;
+        int cSub = darkText ? 0xB316202B : 0xB3FFFFFF;
+        for (int i = 0; i < barIcons.size() && i < barLabels.size(); i++) {
+            boolean on = i == sel;
+            TextView ic = barIcons.get(i), lb = barLabels.get(i);
+            if (animate) {
+                animateTextColor(ic, on ? accent : cMain);
+                animateTextColor(lb, on ? accent : cSub);
+            } else {
+                ic.setTextColor(on ? accent : cMain);
+                lb.setTextColor(on ? accent : cSub);
+            }
+            lb.setAlpha(on ? 1f : 0.85f);
+            lb.setTypeface(null, on ? android.graphics.Typeface.BOLD
+                    : android.graphics.Typeface.NORMAL);
+        }
+    }
+
+    /** v10.1：底栏文字/图标换色带过渡，切页时不再生硬跳色 */
+    private void animateTextColor(final TextView tv, final int to) {
+        int from = tv.getCurrentTextColor();
+        if (from == to) return;
+        android.animation.ValueAnimator va =
+                android.animation.ValueAnimator.ofArgb(from, to);
+        va.setDuration(BAR_COLOR_MS);
+        va.setInterpolator(pageEase());
+        va.addUpdateListener(new android.animation.ValueAnimator.AnimatorUpdateListener() {
+            @Override public void onAnimationUpdate(android.animation.ValueAnimator a) {
+                tv.setTextColor((Integer) a.getAnimatedValue());
+            }
+        });
+        va.start();
+    }
+
+    /** v10.1：上滑页面 → 底栏收起；下滑 / 回到顶部 → 复现 */
+    private void handleBarScroll(View sv) {
+        if (floatBar == null || floatBar.getVisibility() != View.VISIBLE) return;
+        int y = sv.getScrollY();
+        int dy = y - barLastScrollY;
+        barLastScrollY = y;
+        if (dy > dp(4)) hideFloatBar();
+        else if (dy < -dp(4) || y <= 0) showFloatBar();
+    }
+
+    private void hideFloatBar() {
+        if (barHidden || floatBar == null) return;
+        barHidden = true;
+        floatBar.animate().cancel();
+        floatBar.animate().translationY(floatBar.getHeight() + dp(28)).alpha(0f)
+                .setDuration(200)
+                .setInterpolator(new DecelerateInterpolator())
+                .withEndAction(new Runnable() {
+                    @Override public void run() { updateGlassPositions(); }
+                }).start();
+    }
+
+    private void showFloatBar() {
+        if (!barHidden || floatBar == null) return;
+        barHidden = false;
+        floatBar.animate().cancel();
+        floatBar.animate().translationY(0f).alpha(1f)
+                .setDuration(200)
+                .setInterpolator(new DecelerateInterpolator())
+                .withEndAction(new Runnable() {
+                    @Override public void run() { updateGlassPositions(); }
+                }).start();
+    }
+
     private void updateGlassPositions() {
         if (glassCache == null || glassCards == null) return;
         int[] loc = new int[2];
@@ -5482,6 +6325,22 @@ public class MainActivity extends Activity {
                 card.getLocationInWindow(loc);
                 ((GlassDrawable) d).setWindowPos(loc[0], loc[1]);
             }
+        }
+        // v10.1：顶栏圆形玻璃按钮跟随滚动重算裁切位置
+        if (roundGlassBtns != null) {
+            for (View b : roundGlassBtns) {
+                if (b == null) continue;
+                android.graphics.drawable.Drawable bd = b.getBackground();
+                if (bd instanceof GlassDrawable) {
+                    b.getLocationInWindow(loc);
+                    ((GlassDrawable) bd).setWindowPos(loc[0], loc[1]);
+                }
+            }
+        }
+        // v10.1：悬浮栏（液态玻璃）跟随滚动重算裁切位置
+        if (floatBar != null && floatBar.getBackground() instanceof GlassDrawable) {
+            floatBar.getLocationInWindow(loc);
+            ((GlassDrawable) floatBar.getBackground()).setWindowPos(loc[0], loc[1]);
         }
     }
 
@@ -5857,7 +6716,6 @@ public class MainActivity extends Activity {
         sunTimeText.setTextColor(cSub);   // 卡片内由 applyCardTexts 自适应覆盖（v9.100）
         regionText.setTextColor(cWeak);
         ipHintText.setTextColor(cWeak);
-        if (refreshLabel != null) refreshLabel.setTextColor(cMain);
         if (cityIconTv != null) cityIconTv.setTextColor(cMain);
         if (gearIconTv != null) gearIconTv.setTextColor(cMain);
         if (titleHourlyTv != null) titleHourlyTv.setTextColor(cMain);

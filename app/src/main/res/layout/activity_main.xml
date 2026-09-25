@@ -76,16 +76,13 @@
                 <!-- 查询其他城市（v9.27：放大镜，圆角矩形） -->
                 <LinearLayout
                     android:id="@+id/cityBtn"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:orientation="horizontal"
                     android:gravity="center"
-                    android:background="@drawable/bg_fab_rect"
-                    android:paddingLeft="10dp"
-                    android:paddingRight="10dp"
-                    android:paddingTop="7dp"
-                    android:paddingBottom="7dp"
+                    android:background="@drawable/bg_fab_rect_ripple"
                     android:layout_marginRight="8dp"
+                    android:contentDescription="查询其他城市"
                     android:clickable="true"
                     android:focusable="true">
 
@@ -95,56 +92,40 @@
                         android:layout_height="wrap_content"
                         android:text=""
                         android:textColor="#FFFFFF"
-                        android:textSize="18sp" />
+                        android:textSize="20sp" />
                 </LinearLayout>
 
                 <!-- 刷新（v9.26：圆角矩形，移至设置按钮左侧） -->
                 <LinearLayout
                     android:id="@+id/refreshBtn"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:background="@drawable/bg_fab_rect"
-                    android:paddingLeft="12dp"
-                    android:paddingRight="14dp"
-                    android:paddingTop="7dp"
-                    android:paddingBottom="7dp"
+                    android:gravity="center"
+                    android:background="@drawable/bg_fab_rect_ripple"
                     android:layout_marginRight="8dp"
+                    android:contentDescription="刷新天气"
                     android:clickable="true"
                     android:focusable="true">
 
                     <ImageView
                         android:id="@+id/refreshIcon"
-                        android:layout_width="20dp"
-                        android:layout_height="20dp"
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
                         android:src="@drawable/ic_refresh"
                         android:contentDescription="刷新" />
-
-                    <TextView
-                        android:id="@+id/refreshLabel"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginLeft="6dp"
-                        android:text="刷新"
-                        android:textColor="#FFFFFF"
-                        android:textSize="14sp"
-                        android:fontFamily="sans-serif-medium" />
                 </LinearLayout>
 
                 <!-- 外观设置入口（v9.28：统一圆角矩形风格） -->
                 <LinearLayout
                     android:id="@+id/gearBtn"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:layout_marginRight="8dp"
                     android:orientation="horizontal"
                     android:gravity="center"
-                    android:background="@drawable/bg_fab_rect"
-                    android:paddingLeft="10dp"
-                    android:paddingRight="10dp"
-                    android:paddingTop="7dp"
-                    android:paddingBottom="7dp"
+                    android:background="@drawable/bg_fab_rect_ripple"
+                    android:contentDescription="外观与设置"
                     android:clickable="true"
                     android:focusable="true">
 
@@ -154,7 +135,7 @@
                         android:layout_height="wrap_content"
                         android:text=""
                         android:textColor="#FFFFFF"
-                        android:textSize="18sp" />
+                        android:textSize="20sp" />
                 </LinearLayout>
             </LinearLayout>
 

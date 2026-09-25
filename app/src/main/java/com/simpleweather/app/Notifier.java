@@ -29,7 +29,6 @@ public final class Notifier {
 
     public static final int ID_REPORT = 1001;   // 定时天气简报
     public static final int ID_ALERT = 2002;    // 预警提醒
-    public static final int ID_FG = 3003;       // v9.87：前台服务占位通知（服务结束即移除）
     public static final int ID_CUSTOM = 4005;  // v9.87test：自定义气象提醒
     public static final int ID_LOG = 5006;     // v9.90：诊断日志写满提示（低打扰）
 
@@ -57,7 +56,7 @@ public final class Notifier {
 
         NotificationChannel refresh = new NotificationChannel(
                 CH_REFRESH, "后台更新", NotificationManager.IMPORTANCE_MIN);
-        refresh.setDescription("后台自动刷新天气数据时的低优先级占位");
+        refresh.setDescription("后台静默刷新与诊断提示（低优先级，无声音无打扰）");
         refresh.setShowBadge(false);
         nm.createNotificationChannel(refresh);
 
@@ -70,20 +69,6 @@ public final class Notifier {
 
     }
 
-    /** v9.87：后台缓存更新占位通知（前台服务启动凭证，无声音无打扰） */
-    public static Notification buildRefresh(Context c) {
-        ensureChannels(c);
-        Notification.Builder b = Build.VERSION.SDK_INT >= 26
-                ? new Notification.Builder(c, CH_REFRESH)
-                : new Notification.Builder(c);
-        b.setSmallIcon(R.drawable.ic_cloud);
-        b.setContentTitle("简洁天气");
-        b.setContentText("正在更新天气数据…");
-        b.setOngoing(true);
-        b.setContentIntent(mainIntent(c));
-        return b.build();
-    }
-
     /** 构建统一 PendingIntent：点击通知回到主页 */
     private static PendingIntent mainIntent(Context c) {
         Intent it = new Intent(c, MainActivity.class);
@@ -92,28 +77,28 @@ public final class Notifier {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
-    /** 天气简报通知（loading=true 为前台占位，false 为最终简报） */
-    public static Notification buildReport(Context c, String text, boolean loading) {
+    /** 天气简报通知（v10.1：不再有「前台占位」形态，服务已移除） */
+    public static Notification buildReport(Context c, String text) {
         ensureChannels(c);
         Notification.Builder b = Build.VERSION.SDK_INT >= 26
                 ? new Notification.Builder(c, CH_REPORT)
                 : new Notification.Builder(c);
         b.setSmallIcon(R.drawable.ic_cloud);
-        b.setContentTitle(loading ? "简洁天气" : "简洁天气 · 每日天气");
+        b.setContentTitle("简洁天气 · 每日天气");
         b.setContentText(text);
         b.setStyle(new Notification.BigTextStyle().bigText(text));
         b.setContentIntent(mainIntent(c));
-        b.setAutoCancel(!loading);
-        if (!loading) b.setCategory(Notification.CATEGORY_ALARM);
+        b.setAutoCancel(true);
+        b.setCategory(Notification.CATEGORY_ALARM);
         return b.build();
     }
 
-    /** 发送天气简报（同 ID 更新，先显示占位再更新为最终内容） */
-    public static void notifyReport(Context c, String text, boolean loading) {
+    /** 发送天气简报（可跨线程调用） */
+    public static void notifyReport(Context c, String text) {
         NotificationManager nm =
                 (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm == null) return;
-        nm.notify(ID_REPORT, buildReport(c, text, loading));
+        nm.notify(ID_REPORT, buildReport(c, text));
     }
 
     /** 预警提醒通知：标题带等级前缀，正文列出全部生效预警，按等级着色 */

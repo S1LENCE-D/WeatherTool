@@ -83,6 +83,7 @@
 
         <com.simpleweather.app.M3Switch
             android:id="@+id/reportSwitch"
+            android:contentDescription="开启每日定时天气通知"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginLeft="12dp" />
@@ -145,6 +146,7 @@
 
         <LinearLayout
             android:id="@+id/btnTest"
+        android:minHeight="48dp"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
@@ -173,6 +175,7 @@
 
         <LinearLayout
             android:id="@+id/btnAutoStart"
+        android:minHeight="48dp"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
@@ -203,6 +206,7 @@
 
     <!-- 底部支持文本 -->
     <TextView
+        android:id="@+id/reportHint"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"

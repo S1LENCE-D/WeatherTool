@@ -136,6 +136,7 @@ public class LogFile {
                 initState = "日志初始化失败: " + e;
             }
         }
+        Diag.setEnabled(enabled);   // v10.1：诊断打点跟随本开关
     }
 
     /** v9.90：设置页切换日志总开关（持久化 + 立即生效） */
@@ -151,6 +152,7 @@ public class LogFile {
                 initState = "日志已关闭";
             }
         }
+        Diag.setEnabled(on);   // v10.1：同步 logcat 打点开关
     }
 
     /** v9.90：设置页调整大小上限（MB；0 = 不限制，最低 1） */

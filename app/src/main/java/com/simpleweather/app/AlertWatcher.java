@@ -1,9 +1,6 @@
 package com.simpleweather.app;
 
-import android.app.AlarmManager;
-import android.app.PendingIntent;
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
 
 import java.text.SimpleDateFormat;
@@ -92,9 +89,23 @@ public final class AlertWatcher {
         return new SimpleDateFormat("yyyyMMdd", Locale.US).format(new Date());
     }
 
-    /** v9.88.3：启动一次预警检查服务（后台心跳调用；广播窗口内毫秒级返回） */
-    public static void startCheck(Context ctx) {
-        ctx.startService(new Intent(ctx, AlertWatchService.class));
+    /**
+     * v10.1：启动一次预警检查。
+     *
+     * <p>**不再启动服务**——旧实现 `ctx.startService(new Intent(ctx, AlertWatchService.class))`
+     * 在后台（15 分钟心跳）调用时会抛
+     * {@code IllegalStateException: Not allowed to start service ... app is in background}
+     * （Android 8+ 限制），异常在接收器里未捕获 → 进程崩溃、预警检查从未真正执行；
+     * 只有用户在设置里打开开关时的**前台**首查能跑，所以看起来「开了一次就再也没动静」。
+     *
+     * <p>现在直接在子线程里完成检查。后台心跳里请直接调用
+     * {@link AlertChecker#check(Context)}（在同一 goAsync 作用域内）。
+     */
+    public static void startCheck(final Context ctx) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() { AlertChecker.check(ctx); }
+        }).start();
     }
 
 }

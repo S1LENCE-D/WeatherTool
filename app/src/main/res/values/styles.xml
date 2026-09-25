@@ -19,4 +19,14 @@
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowAnimationStyle">@style/SettingsSheetAnim</item>
     </style>
+
+    <!-- v10.1：悬浮底栏模式下的整页横向转场（方向按底栏相对位置：右侧页自右入、左侧页自左入） -->
+    <style name="PageSlideRight" parent="@android:style/Animation">
+        <item name="android:windowEnterAnimation">@anim/page_in_right</item>
+        <item name="android:windowExitAnimation">@anim/page_out_right</item>
+    </style>
+    <style name="PageSlideLeft" parent="@android:style/Animation">
+        <item name="android:windowEnterAnimation">@anim/page_in_left</item>
+        <item name="android:windowExitAnimation">@anim/page_out_left</item>
+    </style>
 </resources>
