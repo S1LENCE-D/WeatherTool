@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ac_unit 雪花（雪）（提取自 MaterialIcons-Regular.ttf U+EB3B，与 App 内字形一致；
+     已做 Y 轴翻转，512 视口，运行时按主题 setColorFilter 着色） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M469 235V277H380L449 346L419 377L320 277H277V320L377 419L346 449L277 380V469H235V380L166 449L135 419L235 320V277H192L93 377L63 346L132 277H43V235H132L63 166L93 135L192 235H235V192L135 93L166 63L235 132V43H277V132L346 63L377 93L277 192V235H320L419 135L449 166L380 235Z" />
+</vector>

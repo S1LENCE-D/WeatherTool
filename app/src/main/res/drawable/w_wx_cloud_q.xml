@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- cloud_queue 空心云（阴）（提取自 MaterialIcons-Regular.ttf U+E2C2，与 App 内字形一致；
+     已做 Y 轴翻转，512 视口，运行时按主题 setColorFilter 着色） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M405 384Q431 384 450 365Q469 346 469 320Q469 294 450 275Q431 256 405 256H373V245Q373 196 339 162Q305 128 256 128Q216 128 185 152Q154 176 143 213H128Q93 213 68 238.5Q43 264 43 299Q43 334 68 359Q93 384 128 384ZM413 214Q454 217 483 247.5Q512 278 512 320Q512 364 480.5 395.5Q449 427 405 427H128Q75 427 37.5 389.5Q0 352 0 299Q0 252 33.5 214.5Q67 177 114 172Q135 133 173 109Q211 85 256 85Q310 85 356.5 123Q403 161 413 214Z" />
+</vector>

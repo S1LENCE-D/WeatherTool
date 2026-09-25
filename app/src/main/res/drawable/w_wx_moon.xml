@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- nights_stay 月亮（提取自 MaterialIcons-Regular.ttf U+EA46，与 App 内字形一致；
+     已做 Y 轴翻转，512 视口，运行时按主题 setColorFilter 着色） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M149 341Q166 341 179 354Q192 367 192 384Q192 401 179 414Q166 427 149 427H85Q59 427 40 408Q21 389 21 363Q21 337 40 318Q59 299 85 299Q130 299 145 341ZM237 258Q270 322 328.5 350Q387 378 434 373Q405 418 358 444Q311 470 256 470Q222 470 189 459Q235 433 235 384Q235 357 217 333.5Q199 310 173 302Q140 256 85 256Q62 256 43 265Q43 264 42.5 261Q42 258 42 256Q42 170 102 108Q162 46 248 43Q233 66 223 93Q213 120 213.5 167Q214 214 237 258Z" />
+</vector>

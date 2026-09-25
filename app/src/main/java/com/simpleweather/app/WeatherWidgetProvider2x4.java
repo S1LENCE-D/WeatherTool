@@ -5,21 +5,23 @@ import android.content.Context;
 import android.os.Bundle;
 
 /**
- * v9.21：2x4 小组件（今日概览 + 未来 5 日预报）。
- * 固定使用 widget_2x4 布局，不随尺寸切换布局（拉伸只放大内容区域）。
+ * 多日小组件（默认 4x4，可拉伸 2x2~8x8）。
+ *
+ * <p>v10.1：与单日组件共用 {@code R.layout.widget} 与同一套渲染代码，
+ * 差异只在设计基准尺寸（4x4 基准，主块给紧凑概览）+ 预报行。
+ * 行数由可用高度决定（2x2 收起、4x4 满五行、8x8 加大行距），
+ * 见 {@link WidgetSize}。
  */
 public class WeatherWidgetProvider2x4 extends WeatherWidgetProvider {
 
-    private static final int LAYOUT = R.layout.widget_2x4;
-
     @Override
     public void onUpdate(Context context, AppWidgetManager mgr, int[] ids) {
-        for (int id : ids) refresh(context, mgr, id, LAYOUT);
+        for (int id : ids) refresh(context, mgr, id, true);
     }
 
     @Override
     public void onAppWidgetOptionsChanged(Context context, AppWidgetManager mgr,
                                           int id, Bundle newOptions) {
-        refresh(context, mgr, id, LAYOUT);
+        refreshOnResize(context, mgr, id, true);
     }
 }

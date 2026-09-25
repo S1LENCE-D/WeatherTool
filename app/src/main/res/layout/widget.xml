@@ -1,0 +1,581 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  v10.1：桌面小组件统一布局。
+  单日（2x2 起）与多日（4x4 起）两个 Provider 共用这一份布局与同一套渲染代码，
+  差别只在默认尺寸与设计基准缩放（见 WidgetSize），因此不会出现"两个组件各长各样"。
+
+  层叠次序（FrameLayout）：
+    ① wBg       App 自绘的高斯模糊底图（WidgetGlass，低分辨率柔和内容）
+    ② wContent  文案与图标
+    ③ wGlassEdge 玻璃边线（锐利元素，全分辨率压顶，模糊底图放大后依然清晰）
+
+  所有字号/内边距/图标尺寸都在运行时按 WidgetSize.scale 统一下发，
+  XML 里的值只是首次绘制（launcher 尚未上报尺寸）时的兜底。
+  块级显隐（详情行 / 日出日落 / 预报块）同样由渲染代码控制，初始全部收起。
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widgetRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_widget_dark">
+
+    <!-- ① 模糊底图 -->
+    <ImageView
+        android:id="@+id/wBg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitXY"
+        android:contentDescription="" />
+
+    <!-- ② 内容 -->
+    <LinearLayout
+        android:id="@+id/wContent"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center_vertical"
+        android:padding="10dp">
+
+        <!-- 头部：城市 / 更新时间 -->
+        <LinearLayout
+            android:id="@+id/wHeader"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/wCity"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="--"
+                android:textColor="#F2FFFFFF"
+                android:textSize="12sp"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:fontFamily="sans-serif-medium" />
+
+            <TextView
+                android:id="@+id/wTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text=""
+                android:textColor="#B3FFFFFF"
+                android:textSize="10sp"
+                android:maxLines="1" />
+        </LinearLayout>
+
+        <!-- 主块：天气图标 + 温度 -->
+        <LinearLayout
+            android:id="@+id/wHero"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <ImageView
+                android:id="@+id/wIconImg"
+                android:layout_width="26dp"
+                android:layout_height="26dp"
+                android:contentDescription="" />
+
+            <TextView
+                android:id="@+id/wTemp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="--°"
+                android:textColor="#FFFFFFFF"
+                android:textSize="32sp"
+                android:textStyle="bold"
+                android:maxLines="1"
+                android:fontFamily="sans-serif-medium" />
+        </LinearLayout>
+
+        <!-- 描述行：天气描述 + 今日升降 -->
+        <LinearLayout
+            android:id="@+id/wDescRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="1dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/wDesc"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text=""
+                android:textColor="#B3FFFFFF"
+                android:textSize="11sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/wRange"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text=""
+                android:textColor="#B3FFFFFF"
+                android:textSize="11sp"
+                android:maxLines="1" />
+        </LinearLayout>
+
+        <!-- 详情行一：体感 / 湿度 / 风（按可用宽度逐项装入） -->
+        <LinearLayout
+            android:id="@+id/wExtraRow"
+            android:visibility="gone"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/wFeels"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textColor="#B3FFFFFF"
+                android:textSize="10sp"
+                android:maxLines="1" />
+
+            <ImageView
+                android:id="@+id/wIcHum"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:layout_marginStart="7dp"
+                android:contentDescription="" />
+
+            <TextView
+                android:id="@+id/wHum"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="2dp"
+                android:text=""
+                android:textColor="#B3FFFFFF"
+                android:textSize="10sp"
+                android:maxLines="1" />
+
+            <ImageView
+                android:id="@+id/wIcWind"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:layout_marginStart="7dp"
+                android:contentDescription="" />
+
+            <TextView
+                android:id="@+id/wWind"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="2dp"
+                android:text=""
+                android:textColor="#B3FFFFFF"
+                android:textSize="10sp"
+                android:maxLines="1" />
+        </LinearLayout>
+
+        <!-- 详情行二：云量 / UV -->
+        <LinearLayout
+            android:id="@+id/wExtraRow2"
+            android:visibility="gone"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <ImageView
+                android:id="@+id/wIcCloud"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:contentDescription="" />
+
+            <TextView
+                android:id="@+id/wCloud"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="2dp"
+                android:text=""
+                android:textColor="#B3FFFFFF"
+                android:textSize="10sp"
+                android:maxLines="1" />
+
+            <ImageView
+                android:id="@+id/wIcUv"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:layout_marginStart="7dp"
+                android:contentDescription="" />
+
+            <TextView
+                android:id="@+id/wUv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="2dp"
+                android:text=""
+                android:textColor="#B3FFFFFF"
+                android:textSize="10sp"
+                android:maxLines="1" />
+        </LinearLayout>
+
+        <!-- 分隔线（颜色随深浅主题切换）。
+             必须用 TextView 而不是原生 <View>：RemoteViews 只允许带 @RemoteView 注解的类，
+             android.view.View / android.view.Space 都不在名单内，放进去会让 launcher
+             膨胀布局直接失败（表现就是「载入小组件时出现问题」）。 -->
+        <TextView
+            android:id="@+id/wDivider"
+            android:visibility="gone"
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="4dp"
+            android:background="@drawable/divider_setting_dark" />
+
+        <!-- 日出日落 -->
+        <TextView
+            android:id="@+id/wSunMoon"
+            android:visibility="gone"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:text=""
+            android:textColor="#B3FFFFFF"
+            android:textSize="10sp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <!-- 预报块：行数由尺寸档决定，多余行 GONE -->
+        <LinearLayout
+            android:id="@+id/wForecast"
+            android:visibility="gone"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:id="@+id/wRow0"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/wDay0"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="12sp"
+                    android:maxLines="1" />
+
+                <ImageView
+                    android:id="@+id/wFIcon0"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginStart="6dp"
+                    android:contentDescription="" />
+
+                <TextView
+                    android:id="@+id/wPop0"
+                    android:layout_width="44dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text=""
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="11sp"
+                    android:gravity="center"
+                    android:maxLines="1" />
+
+                <!-- 弹性占位（RemoteViews 白名单不含 Space，用空 TextView 代替） -->
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1"
+                    android:text=""
+                    android:background="@null" />
+
+                <TextView
+                    android:id="@+id/wHi0"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textColor="#F2FFFFFF"
+                    android:textSize="12sp"
+                    android:maxLines="1" />
+
+                <TextView
+                    android:id="@+id/wLo0"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text=""
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="12sp"
+                    android:maxLines="1" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/wRow1"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/wDay1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="12sp"
+                    android:maxLines="1" />
+
+                <ImageView
+                    android:id="@+id/wFIcon1"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginStart="6dp"
+                    android:contentDescription="" />
+
+                <TextView
+                    android:id="@+id/wPop1"
+                    android:layout_width="44dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text=""
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="11sp"
+                    android:gravity="center"
+                    android:maxLines="1" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1"
+                    android:text=""
+                    android:background="@null" />
+
+                <TextView
+                    android:id="@+id/wHi1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textColor="#F2FFFFFF"
+                    android:textSize="12sp"
+                    android:maxLines="1" />
+
+                <TextView
+                    android:id="@+id/wLo1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text=""
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="12sp"
+                    android:maxLines="1" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/wRow2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/wDay2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="12sp"
+                    android:maxLines="1" />
+
+                <ImageView
+                    android:id="@+id/wFIcon2"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginStart="6dp"
+                    android:contentDescription="" />
+
+                <TextView
+                    android:id="@+id/wPop2"
+                    android:layout_width="44dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text=""
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="11sp"
+                    android:gravity="center"
+                    android:maxLines="1" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1"
+                    android:text=""
+                    android:background="@null" />
+
+                <TextView
+                    android:id="@+id/wHi2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textColor="#F2FFFFFF"
+                    android:textSize="12sp"
+                    android:maxLines="1" />
+
+                <TextView
+                    android:id="@+id/wLo2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text=""
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="12sp"
+                    android:maxLines="1" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/wRow3"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/wDay3"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="12sp"
+                    android:maxLines="1" />
+
+                <ImageView
+                    android:id="@+id/wFIcon3"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginStart="6dp"
+                    android:contentDescription="" />
+
+                <TextView
+                    android:id="@+id/wPop3"
+                    android:layout_width="44dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text=""
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="11sp"
+                    android:gravity="center"
+                    android:maxLines="1" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1"
+                    android:text=""
+                    android:background="@null" />
+
+                <TextView
+                    android:id="@+id/wHi3"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textColor="#F2FFFFFF"
+                    android:textSize="12sp"
+                    android:maxLines="1" />
+
+                <TextView
+                    android:id="@+id/wLo3"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text=""
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="12sp"
+                    android:maxLines="1" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/wRow4"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/wDay4"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="12sp"
+                    android:maxLines="1" />
+
+                <ImageView
+                    android:id="@+id/wFIcon4"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginStart="6dp"
+                    android:contentDescription="" />
+
+                <TextView
+                    android:id="@+id/wPop4"
+                    android:layout_width="44dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text=""
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="11sp"
+                    android:gravity="center"
+                    android:maxLines="1" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1"
+                    android:text=""
+                    android:background="@null" />
+
+                <TextView
+                    android:id="@+id/wHi4"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textColor="#F2FFFFFF"
+                    android:textSize="12sp"
+                    android:maxLines="1" />
+
+                <TextView
+                    android:id="@+id/wLo4"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text=""
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="12sp"
+                    android:maxLines="1" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- ③ 玻璃边线（只描边，不盖底色，避免压到文字对比度）。
+         同样是 TextView 而非 <View>，原因见上方分隔线处的说明（RemoteViews 白名单）。 -->
+    <TextView
+        android:id="@+id/wGlassEdge"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:text=""
+        android:background="@drawable/w_glass_edge_dark" />
+</FrameLayout>

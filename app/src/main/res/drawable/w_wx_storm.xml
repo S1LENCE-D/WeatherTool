@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- thunderstorm 闪电云（雷暴）（提取自 MaterialIcons-Regular.ttf U+EBDB，与 App 内字形一致；
+     已做 Y 轴翻转，512 视口，运行时按主题 setColorFilter 着色） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M382 150Q377 119 359 95Q341 71 314.5 57Q288 43 256 43Q221 43 191 60.5Q161 78 145 108Q116 112 93 128.5Q70 145 56.5 170Q43 195 43 224Q43 256 58.5 283Q74 310 101 325.5Q128 341 160 341H373Q400 341 421.5 328Q443 315 456 293.5Q469 272 469 245Q469 220 457.5 199.5Q446 179 426.5 165.5Q407 152 382 150ZM316 363 254 433 297 455 246 512H303L365 441L322 420L372 363ZM188 363 126 433 169 455 118 512H175L237 441L194 420L244 363Z" />
+</vector>

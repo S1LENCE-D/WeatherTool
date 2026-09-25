@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 湿度（water_drop 水滴）（提取自 MaterialIcons-Regular.ttf U+E798，与 App 内字形一致；
-     v10.1：补做 Y 轴翻转——旧文件漏翻，会上下镜像，云量/湿度肉眼可见倒置） -->
+<!-- water_drop 水滴（雨/阵雨）（提取自 MaterialIcons-Regular.ttf U+E798，与 App 内字形一致；
+     已做 Y 轴翻转，512 视口，运行时按主题 setColorFilter 着色） -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="15dp"
-    android:height="15dp"
+    android:width="24dp"
+    android:height="24dp"
     android:viewportWidth="512"
     android:viewportHeight="512">
     <path
