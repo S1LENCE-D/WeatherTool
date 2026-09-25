@@ -10,8 +10,8 @@ android {
         applicationId 'com.simpleweather.app'
         minSdk 24
         targetSdk 33
-        versionCode 152
-        versionName '10.2'
+        versionCode 151
+        versionName '10.1'
     }
 
     signingConfigs {
@@ -32,6 +32,10 @@ android {
     }
 
     buildTypes {
+        // v10.1：测试包版本号与正式版解绑 —— debug 产物自带 -test 后缀，便于区分
+        debug {
+            versionNameSuffix '-test'
+        }
         release {
             // R8 裁剪 + 资源收缩（纯 Java 工程，混淆规则见 app/proguard-rules.pro）
             minifyEnabled true

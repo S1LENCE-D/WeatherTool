@@ -2,7 +2,7 @@
 
 > 极简、纯净、零广告的 Android 天气应用 · 作者：酷安 @Eartecd
 
-**当前版本 v10.2**（versionCode 152）· 单 APK 约 **545 KB** · 纯 Java 编写，无第三方运行时依赖
+**当前版本 v10.1**（versionCode 151）· 单 APK 约 **545 KB** · 纯 Java 编写，无第三方运行时依赖
 
 ---
 
@@ -84,7 +84,7 @@ echo "sdk.dir=/path/to/android-sdk" > local.properties
 推送 `v*` 标签即触发 `.github/workflows/release.yml`，自动构建并创建 Release：
 
 ```bash
-git tag v10.2 && git push origin v10.2
+git tag v10.1 && git push origin v10.1
 ```
 
 也可在仓库 Actions 页面手动运行（`workflow_dispatch`，填入版本号）。
@@ -134,7 +134,7 @@ CI 运行在 x86_64，`release.yml` 会预建软链接使该固定路径可用�
 
 ## 更新记录
 
-完整版本历史见 [CHANGELOG.md](CHANGELOG.md)；最新版 v10.2 带来可选悬浮底栏、内置降雨图页面，以及重写的设置页。
+完整版本历史见 [CHANGELOG.md](CHANGELOG.md)；最新版 v10.1 带来可选悬浮底栏、内置降雨图页面，以及重写的设置页。
 
 ## 仓库结构
 
