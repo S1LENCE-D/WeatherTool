@@ -10,7 +10,8 @@ android {
         applicationId 'com.simpleweather.app'
         minSdk 24
         targetSdk 33
-        versionCode 151
+        // v10.1 的第二次构建（同一版本名，覆盖发布）：版本码递增，保证安装器当作升级
+        versionCode 152
         versionName '10.1'
     }
 
