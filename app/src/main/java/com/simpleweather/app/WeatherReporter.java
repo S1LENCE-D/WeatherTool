@@ -105,6 +105,8 @@ public final class WeatherReporter {
 
     /** 开启/关闭 + 更新每日调度 */
     public static void setEnabled(Context ctx, boolean on, int hour, int minute) {
+        hour = clamp(hour, 0, 23);
+        minute = clamp(minute, 0, 59);
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putBoolean(KEY_ENABLED, on)
                 .putInt(KEY_HOUR, hour)
@@ -114,11 +116,29 @@ public final class WeatherReporter {
         else cancel(ctx);
     }
 
+    /**
+     * v10.1.3：只更新「通知时刻」，不动开关状态；已开启则立刻按新时刻重排。
+     * 用于"用户改了时间但此刻开关是关的"这种走法 —— 时刻也要记住。
+     */
+    public static void setTime(Context ctx, int hour, int minute) {
+        hour = clamp(hour, 0, 23);
+        minute = clamp(minute, 0, 59);
+        SharedPreferences sp = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        sp.edit().putInt(KEY_HOUR, hour).putInt(KEY_MINUTE, minute).apply();
+        if (sp.getBoolean(KEY_ENABLED, false)) schedule(ctx, hour, minute);
+    }
+
+    /** 时刻越界保护：历史版本若存进过 24/60 这类值，这里直接修回合法范围 */
+    private static int clamp(int v, int min, int max) {
+        return v < min ? min : (v > max ? max : v);
+    }
+
     /** 应用启动 / 开机后恢复调度（自启动生效点） */
     public static void ensureScheduled(Context ctx) {
         SharedPreferences sp = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         if (sp.getBoolean(KEY_ENABLED, false)) {
-            schedule(ctx, sp.getInt(KEY_HOUR, 8), sp.getInt(KEY_MINUTE, 0));
+            schedule(ctx, clamp(sp.getInt(KEY_HOUR, 8), 0, 23),
+                    clamp(sp.getInt(KEY_MINUTE, 0), 0, 59));
         }
     }
 
@@ -142,6 +162,8 @@ public final class WeatherReporter {
      * </ol>
      */
     public static void schedule(Context ctx, int hour, int minute) {
+        hour = clamp(hour, 0, 23);
+        minute = clamp(minute, 0, 59);
         AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
         Intent it = new Intent(ctx, AlarmReceiver.class);
         PendingIntent pi = PendingIntent.getBroadcast(ctx, 0, it,
@@ -227,17 +249,29 @@ public final class WeatherReporter {
      * 走的也是 ReportRunner，因此同样会写标记（心跳补发据此跳过）。定时闹钟本身不看标记，
      * 到点仍会照常推送。
      */
-    public static boolean catchUpReport(Context ctx) {   // true=今日已确认送达
+    /**
+     * v10.1.3：<b>"是否该通知"的显式判定</b>（后台流程的第 ④ 步）——
+     * 三个条件全满足才算该播报：开关开启、今天还没送达、已过设定时刻。
+     * 把判定与发送分开，后台日志里能明确看到"该发/不该发"，也方便排查。
+     */
+    public static boolean shouldReportNow(Context ctx) {
         SharedPreferences sp = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        if (!sp.getBoolean(KEY_ENABLED, false)) return false;              // 开关关闭：不补
-        String today = todayKey();
-        if (today.equals(sp.getString(KEY_LAST_REPORT_DATE, ""))) return true;  // 今天已送达
+        if (!sp.getBoolean(KEY_ENABLED, false)) return false;              // 开关关闭
+        if (todayKey().equals(sp.getString(KEY_LAST_REPORT_DATE, ""))) return false;  // 今天已送达
         Calendar plan = Calendar.getInstance();
         plan.set(Calendar.HOUR_OF_DAY, sp.getInt(KEY_HOUR, 8));
         plan.set(Calendar.MINUTE, sp.getInt(KEY_MINUTE, 0));
         plan.set(Calendar.SECOND, 0);
         plan.set(Calendar.MILLISECOND, 0);
-        if (System.currentTimeMillis() < plan.getTimeInMillis()) return false;   // 未到点
+        return System.currentTimeMillis() >= plan.getTimeInMillis();       // 到点才算
+    }
+
+    public static boolean catchUpReport(Context ctx) {   // true=今日已确认送达
+        SharedPreferences sp = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        if (!sp.getBoolean(KEY_ENABLED, false)) return false;              // 开关关闭：不补
+        String today = todayKey();
+        if (today.equals(sp.getString(KEY_LAST_REPORT_DATE, ""))) return true;  // 今天已送达
+        if (!shouldReportNow(ctx)) return false;                            // 未到点
         // v10.1：直接在本线程完成（调用方是心跳接收器的 goAsync 线程），不再启动服务；
         // 且「今日已送达」标记由 ReportRunner 在通知真正送出后才写 —— 失败还能下一轮再补。
         return ReportRunner.run(ctx);

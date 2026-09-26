@@ -17,6 +17,12 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- v10.1.2：可选常驻后台进程用（前台服务）。注意：开机广播不能启动前台服务，
+         常驻只在应用内开启；重启后的后台链路靠 WeatherJobService 的 persisted 任务维持 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- 文档 §4：Android 14 起前台服务必须声明类型+对应权限；现在预先声明，
+         targetSdk 33 下不影响行为，将来提 targetSdk 时不用再改清单 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- v9.87：前台服务启动凭证（每日天气通知） -->
     <!-- v9.87：精确闹钟（每日定时通知准时触发；Android 12+ 声明，无权限时代码回退 setAlarmClock） -->
@@ -45,6 +51,18 @@
             android:name=".RainMapActivity"
             android:exported="false" />
 
+        <!-- v10.1.2：后台自启动任务（JobScheduler，setPersisted → 重启后系统自动恢复） -->
+        <service
+            android:name=".WeatherJobService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        <!-- v10.1.2：可选常驻后台进程（前台服务，带一条 IMPORTANCE_MIN 常驻通知） -->
+        <service
+            android:name=".WeatherKeepAliveService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <receiver
             android:name=".AlarmReceiver"
             android:exported="false" />
@@ -60,6 +78,9 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <!-- 文档 §3.6：部分 ROM（HTC/部分国产）只发快速开机广播，两个都收 -->
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>
 

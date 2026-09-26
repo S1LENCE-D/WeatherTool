@@ -31,6 +31,7 @@ import android.graphics.Shader;
 public class LiquidBarDrawable extends GlassDrawable {
 
     private final float radius;
+    private final int shadeColor;
     private final Paint shade = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path clip = new Path();
     private final RectF tmp = new RectF();
@@ -38,8 +39,21 @@ public class LiquidBarDrawable extends GlassDrawable {
 
     public LiquidBarDrawable(Bitmap fullBmp, int windowX, int windowY, float cornerPx,
                              int scaleFactor, int highlightColor, int borderColor) {
+        this(fullBmp, windowX, windowY, cornerPx, scaleFactor, highlightColor, borderColor,
+                0x1A000000);
+    }
+
+    /**
+     * @param bottomShadeColor 底缘内阴影颜色：深色主题给 0x1A000000（玻片厚度感），
+     *                         浅色主题要收敛到 0x08000000 左右 ——
+     *                         否则浅色玻璃底下缘会显成一条半透明灰横条（压在文字下方）。
+     */
+    public LiquidBarDrawable(Bitmap fullBmp, int windowX, int windowY, float cornerPx,
+                             int scaleFactor, int highlightColor, int borderColor,
+                             int bottomShadeColor) {
         super(fullBmp, windowX, windowY, cornerPx, scaleFactor, highlightColor, borderColor);
         radius = cornerPx;
+        shadeColor = bottomShadeColor;
     }
 
     /** 圆角轮廓：有了它，setElevation 才能投出圆角阴影 */
@@ -58,7 +72,7 @@ public class LiquidBarDrawable extends GlassDrawable {
             // 底部内阴影：从下缘往上约 38% 高度渐隐
             float top = bounds.top + h * 0.62f;
             shadeShader = new LinearGradient(0, top, 0, bounds.bottom,
-                    0x00000000, 0x1A000000, Shader.TileMode.CLAMP);
+                    0x00000000, shadeColor, Shader.TileMode.CLAMP);
         }
     }
 

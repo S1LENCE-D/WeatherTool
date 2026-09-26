@@ -24,27 +24,90 @@ import android.content.Intent;
 public final class CacheRefresher {
 
     public static final String ACTION_REFRESH = "com.simpleweather.app.CACHE_REFRESH";
-    /** v9.87test：15 分钟一次（移除前台常驻通知后，靠高频率闹钟补偿保活弱化） */
+    /** 正常模式：15 分钟一次（Doze/省电下会被系统延后，属预期行为） */
     public static final long INTERVAL_MS = 15L * 60 * 1000;
+
+    /**
+     * v10.1.3：<b>快速检查模式</b> —— 每 30 秒跑一轮后台流程，<b>仅供验证自启动/后台链路</b>。
+     * 周期任务（JobScheduler/WorkManager）最短间隔是 15 分钟，做不了 30 秒，
+     * 所以这里改用「一次性闹钟 + 每次触发后自己续下一次」的接力写法；
+     * 接力由**系统**持有，因此划掉应用后仍然会到点唤醒 —— 这样才测得出自启动到底通不通。
+     * 代价：费电、频繁请求接口，验证完请关掉。
+     */
+    public static final long FAST_INTERVAL_MS = 30L * 1000;
     private static final int REQ_REFRESH = 3;   // 与每日闹钟(0)、预警闹钟(2)区分
 
     private CacheRefresher() { }
+
+    /** 快速检查开关（存 bg_prefs，与后台去重标记同一处） */
+    public static boolean fastCheck(Context c) {
+        return c.getSharedPreferences("bg_prefs", Context.MODE_PRIVATE)
+                .getBoolean("fast_check", false);  // 默认关：只有验证自启动时才手动打开
+    }
+
+    public static void setFastCheck(Context c, boolean on) {
+        c.getSharedPreferences("bg_prefs", Context.MODE_PRIVATE)
+                .edit().putBoolean("fast_check", on).apply();
+    }
+
+    /** 当前心跳间隔 */
+    public static long intervalMs(Context c) {
+        return fastCheck(c) ? FAST_INTERVAL_MS : INTERVAL_MS;
+    }
 
     /** 应用启动 / 开机：只要曾成功拉取过天气（有缓存）就开启后台刷新 */
     public static void ensureRunning(Context ctx) {
         if (WeatherCache.load(ctx) != null) schedule(ctx);
     }
 
-    /** 注册 15 分钟周期心跳（非精确：Doze/省电下会被系统延后，属预期行为） */
+    /** 注册心跳：按当前模式决定用「周期闹钟」还是「一次性接力」 */
     public static void schedule(Context ctx) {
         AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
         if (am == null) return;
-        Intent it = new Intent(ctx, CacheRefreshReceiver.class)
-                .setAction(ACTION_REFRESH);
+        cancel(ctx);   // 两种模式互斥，先清旧的，避免同时留着两份
+        if (fastCheck(ctx)) {
+            scheduleNext(ctx, FAST_INTERVAL_MS);
+            return;
+        }
+        Intent it = new Intent(ctx, CacheRefreshReceiver.class).setAction(ACTION_REFRESH);
         PendingIntent pi = PendingIntent.getBroadcast(ctx, REQ_REFRESH, it,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        // 首轮延迟 60 秒，避开 App 刚启动时的定位/首刷高峰
+        // 正常模式：沿用非精确周期闹钟，首轮延迟 60 秒避开启动高峰
         am.setInexactRepeating(AlarmManager.RTC_WAKEUP,
                 System.currentTimeMillis() + 60_000, INTERVAL_MS, pi);
+    }
+
+    /**
+     * 排下一次心跳（快速检查模式的接力棒）。每次触发后由接收器回调，
+     * 保证"这一轮跑完立刻定下一轮"，链路由系统持有、不依赖进程存活。
+     */
+    public static void scheduleNext(Context ctx, long delayMs) {
+        AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+        if (am == null) return;
+        Intent it = new Intent(ctx, CacheRefreshReceiver.class).setAction(ACTION_REFRESH);
+        PendingIntent pi = PendingIntent.getBroadcast(ctx, REQ_REFRESH, it,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        long at = System.currentTimeMillis() + Math.max(delayMs, 5_000L);
+        try {
+            if (WeatherReporter.canExactAlarms(ctx)) {
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
+            } else {
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
+            }
+        } catch (Throwable t) {
+            try { am.set(AlarmManager.RTC_WAKEUP, at, pi); } catch (Throwable ignored) { }
+        }
+    }
+
+    /** 撤销心跳（切模式时用） */
+    public static void cancel(Context ctx) {
+        try {
+            AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+            if (am == null) return;
+            Intent it = new Intent(ctx, CacheRefreshReceiver.class).setAction(ACTION_REFRESH);
+            PendingIntent pi = PendingIntent.getBroadcast(ctx, REQ_REFRESH, it,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            am.cancel(pi);
+        } catch (Throwable ignored) { }
     }
 }

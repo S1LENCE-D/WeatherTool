@@ -74,6 +74,10 @@ public class WeatherWidgetProvider extends AppWidgetProvider {
             return;
         }
         // 缓存缺失/过期/位置已变：后台重新拉最新天气（手动城市免定位）
+        // v10.1.1：先把手上这份（哪怕是旧的）渲染一帧，再后台拉新 ——
+        // AppWidgetProvider.onUpdate 没有 goAsync，进程可能在 onReceive 返回后被回收，
+        // 线程未必来得及跑完；先渲染保证"至少不空白"。
+        if (d != null) render(context, mgr, id, d, listMode);
         final WeatherCache.Data fallback = d;
         new Thread(new Runnable() {
             @Override

@@ -26,18 +26,21 @@ public class CacheRefreshReceiver extends BroadcastReceiver {
             @Override
             public void run() {
                 try {
-                    // ① 用上次成功坐标拉最新天气（内部已写缓存）
-                    WeatherCache.Data d = WeatherCache.load(context);
-                    if (d != null) {
-                        WeatherCenter.get().fetchWeather(context, d.lat, d.lng, d.city);
-                    }
-                    // ② 补播报（今天已送达会自动跳过；失败留给下一轮）
-                    WeatherReporter.catchUpReport(context);
-                    // ③ 预警检查（开关关闭时内部直接跳过）
-                    AlertChecker.check(context);
+                    // v10.1.2：统一走 BackgroundTasks —— 拉天气 → 补播报 → 查预警 → 刷小组件，
+                    // 每一步单独 try：小组件渲染异常不再把定时播报一起拖没
+                    //（v10.1.1 就是把这步塞进同一个 try 里，抛出后整段跳过 → 后台通知失效）
+                    BackgroundTasks.run(context);
+                    // 顺带按开关同步常驻服务（后台启动被系统拒绝时静默失败，不影响本流程）
+                    BackgroundTasks.syncKeepAlive(context);
                 } catch (Throwable ignored) {
                     // 失败静默跳过：下一轮心跳 / 回前台补刷兜底
                 } finally {
+                    // v10.1.3：快速检查模式下，由这一轮负责排下一轮（30 秒接力）
+                    try {
+                        if (CacheRefresher.fastCheck(context)) {
+                            CacheRefresher.scheduleNext(context, CacheRefresher.FAST_INTERVAL_MS);
+                        }
+                    } catch (Throwable ignored) { }
                     pr.finish();
                 }
             }

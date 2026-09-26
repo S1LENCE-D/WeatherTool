@@ -94,6 +94,29 @@ public final class Notifier {
     }
 
     /** 发送天气简报（可跨线程调用） */
+    /**
+     * v10.1.2：常驻后台进程的通知（IMPORTANCE_MIN 渠道，无声音、不打扰，可被用户在渠道设置里隐藏）。
+     * @return 通知对象，由 WeatherKeepAliveService.startForeground 使用
+     */
+    public static Notification buildKeepAlive(Context c) {
+        ensureChannels(c);
+        Intent it = new Intent(c, MainActivity.class);
+        it.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= 23) flags |= PendingIntent.FLAG_IMMUTABLE;
+        PendingIntent pi = PendingIntent.getActivity(c, 0, it, flags);
+        Notification.Builder b = Build.VERSION.SDK_INT >= 26
+                ? new Notification.Builder(c, CH_REFRESH) : new Notification.Builder(c);
+        b.setSmallIcon(R.drawable.ic_cloud)
+                .setContentTitle("简洁天气正在后台运行")
+                .setContentText("定时播报与气象预警监控中")
+                .setContentIntent(pi)
+                .setOngoing(true)
+                .setShowWhen(false)
+                .setPriority(Notification.PRIORITY_MIN);
+        return b.build();
+    }
+
     public static void notifyReport(Context c, String text) {
         NotificationManager nm =
                 (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);

@@ -621,6 +621,19 @@ public class MainActivity extends Activity {
         WeatherReporter.ensureScheduled(this);
         // v9.87：恢复每小时后台缓存刷新（有成功缓存即开启）
         CacheRefresher.ensureRunning(this);
+        // v10.1.2：注册 15 分钟 JobScheduler 任务（persisted，重启后系统自动恢复），
+        // 并按开关同步可选常驻服务 —— 与心跳闹钟三者互为兜底
+        BackgroundTasks.ensureJob(this);
+        BackgroundTasks.syncKeepAlive(this);
+
+        // v10.1.3：应用被手动清理/强停后，系统不会再给它自启机会（Android 的硬规则）。
+        // 那么至少做到：用户下次打开应用时，把今天漏掉的简报补上。
+        // 门槛由 catchUpReport 内部把关（到点 + 当天未送达），不会重复推送。
+        new Thread(new Runnable() {
+            @Override public void run() {
+                try { WeatherReporter.catchUpReport(MainActivity.this); } catch (Throwable ignored) { }
+            }
+        }).start();
         // v9.15：首次加载与每次回前台刷新统一由 onResume 触发，避免冷启动双请求
     }
 
@@ -811,6 +824,18 @@ public class MainActivity extends Activity {
         hint.setText(sb.toString());
     }
 
+    /** v10.1.3：后台定时任务是否已在系统中排队（自检面板用） */
+    private boolean jobScheduled() {
+        try {
+            if (Build.VERSION.SDK_INT < 24) return false;
+            android.app.job.JobScheduler js =
+                    (android.app.job.JobScheduler) getSystemService(JOB_SCHEDULER_SERVICE);
+            return js != null && js.getPendingJob(WeatherJobService.JOB_ID) != null;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     /** v10.1：跳系统「闹钟与提醒」权限页（Android 12+，精确闹钟必需） */
     private void openExactAlarmSettings() {
         if (Build.VERSION.SDK_INT < 31) return;
@@ -900,6 +925,14 @@ public class MainActivity extends Activity {
                                 hour[0], minute[0]) + " 推送天气通知"
                            : "已关闭定时天气通知",
                         Toast.LENGTH_SHORT).show();
+                // v10.1.3：Android 14+ 起 SCHEDULE_EXACT_ALARM 默认关闭，到点会不准 ——
+                // 开启定时播报的这一刻正是该问的时候，别等用户自己发现通知迟了
+                if (on && Build.VERSION.SDK_INT >= 31 && !WeatherReporter.canExactAlarms(MainActivity.this)) {
+                    Toast.makeText(MainActivity.this,
+                            "另需开启「闹钟与提醒」权限才能准点推送，正在为你打开…",
+                            Toast.LENGTH_LONG).show();
+                    openExactAlarmSettings();
+                }
                 refreshReportCard();
             }
         });
@@ -914,6 +947,11 @@ public class MainActivity extends Activity {
                         hour[0] = h;
                         minute[0] = m;
                         timeText.setText(String.format(Locale.US, "%02d:%02d", h, m));
+                        // v10.1.3 修复：选定的时刻**无论开关是否打开都要写进存储**。
+                        // 旧逻辑只在开关打开时才 setEnabled(...)，于是"先选时间再开开关"、
+                        // 或"选完直接关掉面板"这两种走法，选的时刻都被丢掉 ——
+                        // 面板重开后仍显示旧值，用户以为设好了，实际调度用的还是旧时刻。
+                        WeatherReporter.setTime(MainActivity.this, h, m);
                         if (sw.isChecked()) {
                             WeatherReporter.setEnabled(
                                     MainActivity.this, true, h, m);
@@ -4042,6 +4080,7 @@ public class MainActivity extends Activity {
         applyTopColors(bgLight);
         applyCardTexts(pal);
         applyHomeStyle();                    // 含 styleCards：极简换纯色卡片 / 渐变铺新快照
+        applyRoundGlassBtns();               // v10.1.3：顶栏圆形玻璃也要跟着重铺（切风格后不再残留旧色）
         // v9.104.3：先恢复 weatherBg 可见再重建玻璃快照，否则 GONE 状态下快照尺寸为 0 导致玻璃缺失
         if (!materialHome) refreshGlass();   // 渐变模式：重绘毛玻璃快照（高光/边框随新主题）
         // v9.101.1：就地切换立即重建详情区（Material 方块网格 / 渐变 4 列），避免返回后才生效
@@ -5204,9 +5243,18 @@ public class MainActivity extends Activity {
 
     /** v9.97：UI 切换仿 NeriPlayer——就地换色，不 recreate、不返回主界面、面板保持当前页 */
     private void pickTheme(String m, Dialog d) {
+        // v10.1.3：极简模式是固定深色外观，此时深浅选择对界面无效 —— 明说，不让用户白点
+        if (Theme.minimalDark(this)) {
+            Theme.setMode(this, m);
+            Toast.makeText(this, "极简模式为固定深色外观；切回「渐变」后深浅设置即生效",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
         if (m.equals(Theme.mode(this))) { closeSettingsPanel(d, 1); return; }
         Theme.setMode(this, m);
         applyUiInPlace();                    // 主界面原地换色
+        applyRainPageTheme();                // v10.1.2：降雨图页背景也跟着手动切换变
+        applyFloatBarBg();                   // 底栏取色同理（设置页/降雨图都以主题为准）
         showSettingsDialog("appearance", d); // 面板就地重建（保持外观二级页）
     }
 
@@ -5282,33 +5330,131 @@ public class MainActivity extends Activity {
             }
         });
 
-        TextView hint = new TextView(this);
-        hint.setText("若系统仍拦截后台，请点击此处前往系统设置，允许自启动与忽略电池优化");
-        hint.setTextSize(12);
-        hint.setTextColor(dark ? 0x66FFFFFF : 0xFF8A93A0);
-        hint.setPadding(dp(14), dp(6), dp(14), 0);
-        LinearLayout.LayoutParams hlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        hlp.topMargin = dp(6);
-        hint.setLayoutParams(hlp);
-        hint.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                try {
-                    Intent si = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                            Uri.parse("package:" + getPackageName()));
-                    si.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    startActivity(si);
-                } catch (Exception e) {
-                    try {
-                        startActivity(new Intent(Settings.ACTION_SETTINGS));
-                    } catch (Exception e2) {
-                        Toast.makeText(MainActivity.this,
-                                "请到系统设置中允许本应用自启动", Toast.LENGTH_LONG).show();
-                    }
-                }
+        final M3Switch keepSw = new M3Switch(this);
+        keepSw.setContentDescription("常驻后台进程");
+        keepSw.setChecked(WeatherKeepAliveService.enabled(this));
+        LinearLayout keepCard = stCard(dark);
+        stSwitchRow(keepCard, R.drawable.ic_set_bell, "常驻后台进程",
+                "前台服务常驻（带一条低扰通知），定时播报与预警更准时；"
+                        + "重启后需打开一次应用恢复常驻", dark, keepSw);
+        page.addView(keepCard);
+        keepSw.setOnCheckedChangeListener(new M3Switch.OnCheckedChangeListener() {
+            @Override public void onCheckedChanged(M3Switch sw, boolean on) {
+                WeatherKeepAliveService.setEnabled(MainActivity.this, on);
+                if (on) WeatherKeepAliveService.start(MainActivity.this);
+                else WeatherKeepAliveService.stop(MainActivity.this);
+                Toast.makeText(MainActivity.this,
+                        on ? "已开启常驻后台进程" : "已关闭常驻后台进程", Toast.LENGTH_SHORT).show();
             }
         });
-        page.addView(hint);
+
+        // ---------- v10.1.3：后台自检面板 ----------
+        // HyperOS/MIUI 这类激进 ROM 上，"哪一项没开"必须一眼可查、一手可改，
+        // 否则用户只能看到"开关是开的、通知就是不来"。
+        stSection(page, "后台自检", "逐项确认；哪一项不对就点那一行去修", dark);
+        LinearLayout chkCard = stCard(dark);
+
+        final boolean exactOk = Build.VERSION.SDK_INT < 31 || WeatherReporter.canExactAlarms(this);
+        stEntry(chkCard, R.drawable.ic_set_bell, "精确闹钟权限",
+                "未开启时推送时刻会被系统推迟（Android 12+ 起默认关闭）",
+                exactOk ? "✓" : "未开启", dark, new Runnable() {
+                    @Override public void run() { openExactAlarmSettings(); }
+                });
+        chkCard.addView(stDivider(dark));
+
+        final boolean notifOk = Build.VERSION.SDK_INT < 33
+                || checkSelfPermission("android.permission.POST_NOTIFICATIONS")
+                        == PackageManager.PERMISSION_GRANTED;
+        stEntry(chkCard, R.drawable.ic_set_bell, "通知权限",
+                "没有它，命中的推送会被系统直接丢弃",
+                notifOk ? "✓" : "未授权", dark, new Runnable() {
+                    @Override public void run() {
+                        if (Build.VERSION.SDK_INT >= 33) {
+                            requestPermissions(new String[]{
+                                    "android.permission.POST_NOTIFICATIONS"}, REQ_NOTIF);
+                        } else {
+                            Toast.makeText(MainActivity.this, "系统版本无需此权限",
+                                    Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                });
+        chkCard.addView(stDivider(dark));
+
+        android.os.PowerManager pwm =
+                (android.os.PowerManager) getSystemService(POWER_SERVICE);
+        final boolean battOk = pwm == null || pwm.isIgnoringBatteryOptimizations(getPackageName());
+        stEntry(chkCard, R.drawable.ic_set_log, "忽略电池优化",
+                "不加入白名单，息屏久了后台会被冻结",
+                battOk ? "✓" : "未加入", dark, new Runnable() {
+                    @Override public void run() { RomSettings.requestIgnoreBattery(MainActivity.this); }
+                });
+        chkCard.addView(stDivider(dark));
+
+        stEntry(chkCard, R.drawable.ic_set_log, "后台定时任务",
+                "JobScheduler 每 15 分钟一轮；点此行重新注册",
+                jobScheduled() ? "已排队" : "未注册", dark, new Runnable() {
+                    @Override public void run() {
+                        WeatherJobService.cancel(MainActivity.this);
+                        BackgroundTasks.ensureJob(MainActivity.this);
+                        Toast.makeText(MainActivity.this, "已重新注册后台任务",
+                                Toast.LENGTH_SHORT).show();
+                    }
+                });
+        chkCard.addView(stDivider(dark));
+
+        stEntry(chkCard, R.drawable.ic_set_log, "常驻后台进程",
+                "开着它进程不会被当缓存回收（带一条低扰通知）",
+                WeatherKeepAliveService.isRunning() ? "运行中"
+                        : (WeatherKeepAliveService.enabled(this) ? "未运行" : "未开启"),
+                dark, new Runnable() {
+                    @Override public void run() {
+                        WeatherKeepAliveService.setEnabled(MainActivity.this, true);
+                        WeatherKeepAliveService.start(MainActivity.this);
+                        Toast.makeText(MainActivity.this, "已启动常驻后台进程",
+                                Toast.LENGTH_SHORT).show();
+                    }
+                });
+        chkCard.addView(stDivider(dark));
+
+        stEntry(chkCard, R.drawable.ic_set_bell, "厂商自启动",
+                "系统不提供查询接口，只能手动加入；点此行打开自启动管理页",
+                "需手动", dark, new Runnable() {
+                    @Override public void run() { RomSettings.openAutoStart(MainActivity.this); }
+                });
+        chkCard.addView(stDivider(dark));
+
+        // v10.1.3：快速检查 —— 临时把心跳压到 30 秒，用于验证"划掉应用后还能不能自己回来"
+        final M3Switch fastSw = new M3Switch(this);
+        fastSw.setContentDescription("快速检查");
+        fastSw.setChecked(CacheRefresher.fastCheck(this));
+        stSwitchRow(chkCard, R.drawable.ic_set_log, "快速检查（每 30 秒）",
+                "临时把后台心跳压到 30 秒，用于验证自启动；费电、频繁请求接口，验证完请关闭",
+                dark, fastSw);
+        fastSw.setOnCheckedChangeListener(new M3Switch.OnCheckedChangeListener() {
+            @Override public void onCheckedChanged(M3Switch b, boolean on) {
+                CacheRefresher.setFastCheck(MainActivity.this, on);
+                CacheRefresher.schedule(MainActivity.this);        // 立刻按新模式重排
+                BackgroundTasks.syncKeepAlive(MainActivity.this);
+                Toast.makeText(MainActivity.this,
+                        on ? "已开启快速检查：每 30 秒跑一轮（验证完记得关掉）"
+                           : "已恢复为每 15 分钟一轮", Toast.LENGTH_LONG).show();
+            }
+        });
+        page.addView(chkCard);
+
+        // 小米 / HyperOS 专项引导：这三项缺一项，重启后都可能不再准时推送
+        TextView romNote = new TextView(this);
+        romNote.setText("小米 / HyperOS 必看：①应用管理 → 简洁天气 →「自启动」打开；"
+                + "②「省电策略」改为无限制（点此直达）；③最近任务里长按本应用卡片 →「加锁」，"
+                + "别直接划掉（划掉等于让系统清理它，自启动与闹钟会一起失效）。"
+                + "前两项缺一项，重启后就可能不再准时推送。");
+        romNote.setTextSize(12);
+        romNote.setTextColor(dark ? 0x99FFFFFF : 0xFF5C6B7A);
+        romNote.setPadding(dp(14), dp(10), dp(14), dp(6));
+        romNote.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { RomSettings.openPowerSettings(MainActivity.this); }
+        });
+        page.addView(romNote);
         return page;
     }
 
@@ -5923,10 +6069,16 @@ public class MainActivity extends Activity {
         afterPageChange();
     }
 
+    /** v10.1.2：按当前主题（含手动选的深/浅）重新给降雨图页上色，无需重建 WebView */
+    private void applyRainPageTheme() {
+        if (rainPageRoot != null) RainMapView.applyTheme(this, rainPageRoot);
+    }
+
     /** 创建/复用降雨图内嵌页（WebView 只建一次；仅坐标变化才重载） */
     private void ensureRainPage() {
         if (pageLayer == null || rainPage != null) {
             if (rainPageRoot != null) rainPageRoot.setPadding(0, sysInsetTop, 0, barAreaPx());
+            applyRainPageTheme();          // v10.1.2：每次进入都按当前主题重上色
             reloadRainIfMoved();
             return;
         }
@@ -6070,8 +6222,10 @@ public class MainActivity extends Activity {
         GradientDrawable mask = new GradientDrawable();
         mask.setCornerRadius(dp(20));
         int[][] states = new int[][]{ new int[]{android.R.attr.state_pressed}, new int[]{} };
+        // v10.1.2：水波色跟随主题（白天模式用深色水波，白水波压在浅色玻璃上看不见）
         android.content.res.ColorStateList csl =
-                new android.content.res.ColorStateList(states, new int[]{0x33FFFFFF, 0x00000000});
+                new android.content.res.ColorStateList(states,
+                        new int[]{Theme.ripple(this), 0x00000000});
         item.setBackground(new android.graphics.drawable.RippleDrawable(csl, null, mask));
 
         item.setOnClickListener(new View.OnClickListener() {
@@ -6139,7 +6293,11 @@ public class MainActivity extends Activity {
             // v10.2：不按可见性跳过 —— 悬浮底栏关闭后齿轮才由 GONE 变 VISIBLE，
             // 若那时不重铺，它就会保持 XML 里的胶囊底（这正是"关掉底栏后设置键不是圆形玻璃"的原因）
             if (b == null) continue;
-            if (materialHome || glassCache == null) {
+            // v10.1.3：与底栏同一套取色标准 ——
+            // 极简模式用其固定深色底的玻璃（此前是平的 12% 白，与深色主页不搭），
+            // 渐变模式用背景快照玻璃；快照不可用时才退回纯色圆。
+            Bitmap snap = materialHome ? solidSnapshot(materialPalette(0)[0]) : glassCache;
+            if (snap == null) {
                 GradientDrawable gd = new GradientDrawable();
                 gd.setShape(GradientDrawable.OVAL);
                 gd.setColor(0x1FFFFFFF);
@@ -6147,7 +6305,7 @@ public class MainActivity extends Activity {
             } else {
                 b.getLocationInWindow(loc);
                 int size = b.getWidth() > 0 ? b.getWidth() : dp(48);
-                GlassDrawable gd = new GlassDrawable(glassCache, loc[0], loc[1],
+                GlassDrawable gd = new GlassDrawable(snap, loc[0], loc[1],
                         size / 2f, 4, Theme.glassHighlight(this), Theme.glassBorder(this));
                 gd.setAlpha(Theme.glassAlpha(this));
                 b.setBackground(gd);
@@ -6156,7 +6314,7 @@ public class MainActivity extends Activity {
                 GradientDrawable mask = new GradientDrawable();
                 mask.setShape(GradientDrawable.OVAL);
                 b.setForeground(new android.graphics.drawable.RippleDrawable(
-                        android.content.res.ColorStateList.valueOf(0x33FFFFFF), null, mask));
+                        android.content.res.ColorStateList.valueOf(Theme.ripple(this)), null, mask));
             }
         }
     }
@@ -6199,29 +6357,84 @@ public class MainActivity extends Activity {
      * 再由 {@link LiquidBarDrawable#getOutline} 配合 elevation 投出悬浮阴影；
      * 关闭时退化为半透明圆角面板。
      */
+    /**
+     * v10.1.2：当前页的「纯色底」取值 —— 非 0 表示该页是纯色底，
+     * 0 表示用主页背景快照（渐变底）。
+     */
+    private int barPageSolidBg() {
+        if (materialHome) return materialPalette(0)[0];                 // 极简模式：主题色
+        if (settingsPageOpen) return Theme.setBg(this);                 // 设置页：与面板 root 同色
+        if (currentPage == PAGE_RAIN) {                                 // 降雨图：与 RainMapView 同色
+            return Theme.isDark(this) ? 0xFF111318 : 0xFFFDFCFF;
+        }
+        return 0;                                                       // 主页：走背景快照
+    }
+
+    /** 颜色亮度 0~255（感知加权，用来决定文字深浅） */
+    private static float lumaOf(int color) {
+        return 0.2126f * ((color >> 16) & 0xFF)
+                + 0.7152f * ((color >> 8) & 0xFF)
+                + 0.0722f * (color & 0xFF);
+    }
+
+    /**
+     * v10.1.2：底栏背后是亮底吗？
+     * 纯色页直接判色；主页取玻璃快照的平均亮度。底栏文字深浅、玻璃不透明度、
+     * 底部阴影强度都跟着它走 —— 白天模式下不再出现白字压在浅色玻璃上。
+     */
+    private boolean barBgIsLight() {
+        // v10.1.3 统一标准：极简模式与设置页/降雨图都以 Theme.isDark 为准
+        //（极简=固定深色，已由 Theme.isDark 统一认领）
+        if (materialHome || settingsPageOpen || currentPage == PAGE_RAIN) {
+            return !Theme.isDark(this);
+        }
+        // 主页渐变底：没有单一色值，取背景快照的平均亮度
+        Bitmap b = glassCache;
+        if (b == null) return false;
+        long sum = 0;
+        int n = 0;
+        for (int y = 0; y < b.getHeight(); y += 2) {
+            for (int x = 0; x < b.getWidth(); x += 2) {
+                sum += (long) lumaOf(b.getPixel(x, y));
+                n++;
+            }
+        }
+        return n > 0 && (sum / (float) n) > 158f;
+    }
+
+    /** 底栏文字两档颜色：{主色, 次要色}，唯一来源（两处调用点都从这里取） */
+    private int[] barTextColors() {
+        boolean dark = barBgIsLight();
+        return new int[]{ dark ? 0xFF16202B : 0xFFFFFFFF,
+                          dark ? 0xC016202B : 0xB3FFFFFF };
+    }
+
     private void applyFloatBarBg() {
         if (floatBar == null) return;
-        boolean darkText = materialHome && m3BgActive && m3BgLight;
-        int cMain = darkText ? 0xFF16202B : 0xFFFFFFFF;
-        int cSub = darkText ? 0xB316202B : 0xB3FFFFFF;
+
+        // v10.1.2：底色与文字深浅统一由 barPageSolidBg() / barBgIsLight() 决定
+        int solidBg = barPageSolidBg();
+        boolean darkText = barBgIsLight();
+        int[] tc = barTextColors();
+        int cMain = tc[0], cSub = tc[1];
         for (TextView t : barIcons) t.setTextColor(cMain);
         for (TextView t : barLabels) t.setTextColor(cSub);
         updateBarSelection(false);   // 覆盖当前页的高亮色（整组重铺，不做过渡）
 
         // v10.1：玻璃**始终保留质感**，只是"取色"跟随所在页面 ——
-        // 渐变主页用背景快照；极简模式 / 降雨图页这类纯色底则换一张 1×1 同色快照，
+        // 渐变主页用背景快照；极简模式 / 降雨图 / 设置页这类纯色底换成对应的 1×1 同色快照，
         // 于是高光、描边、悬浮阴影、半透都在，颜色也不会跟背景打架。
-        // （此前这两处直接退化成纯色面板，表现为"切到降雨图后玻璃取色和效果都消失"）
-        Bitmap snap = glassCache;
-        if (materialHome || currentPage == PAGE_RAIN) {
-            snap = solidSnapshot(materialHome ? materialPalette(0)[0] : 0xFF111318);
-        }
+        Bitmap snap = (solidBg != 0) ? solidSnapshot(solidBg) : glassCache;
         if (liquidGlassOn() && snap != null) {
             int[] loc = new int[2];
             floatBar.getLocationInWindow(loc);
+            // 白天模式下把玻璃压得更实一些（否则浅底 + 浅字对比度不够）
+            int alpha = Theme.glassAlpha(this);
+            if (darkText) alpha = Math.min(255, alpha + 35);
             LiquidBarDrawable d = new LiquidBarDrawable(snap, loc[0], loc[1], dp(26), 4,
-                    Theme.glassHighlight(this), Theme.glassBorder(this));
-            d.setAlpha(Theme.glassAlpha(this));
+                    Theme.glassHighlight(this), Theme.glassBorder(this),
+                    darkText ? 0x08000000 : 0x1A000000);   // 底部内阴影：浅色底下大幅收敛
+            d.setAlpha(alpha);
             floatBar.setBackground(d);
         } else {
             GradientDrawable gd = new GradientDrawable();
@@ -6246,9 +6459,11 @@ public class MainActivity extends Activity {
         if (barIcons.isEmpty()) return;
         int sel = settingsPageOpen ? PAGE_SETTINGS : currentPage;
         int accent = Theme.setAccent(this);
-        boolean darkText = materialHome && m3BgActive && m3BgLight;
-        int cMain = darkText ? 0xFF16202B : 0xFFFFFFFF;
-        int cSub = darkText ? 0xB316202B : 0xB3FFFFFF;
+        // v10.1.2：与 applyFloatBarBg 共用同一套文字色 ——
+        // 此前这里只用「极简模式」判断，它在本方法里排在 applyFloatBarBg 之后执行，
+        // 会把刚设好的深色文字又盖回白色（白天模式可读性差的根因之一）
+        int[] tc = barTextColors();
+        int cMain = tc[0], cSub = tc[1];
         for (int i = 0; i < barIcons.size() && i < barLabels.size(); i++) {
             boolean on = i == sel;
             TextView ic = barIcons.get(i), lb = barLabels.get(i);
@@ -6661,6 +6876,7 @@ public class MainActivity extends Activity {
                 {Theme.accent(this), cols[2]},
                 {0xFF1F2A36, cols[0]}, {0xFFF5F7FA, cols[0]},
                 {0xFF5C6B7A, cols[1]}, {0xFFD9E2EC, cols[1]},
+                {0xFF4A5866, cols[1]}, {0xFF64717F, cols[1]},   // v10.1.3：新实色小字
                 {0xD95C6B7A, cols[1]},   // v9.100：浅色 cSub 小字（日出日落等）卡片内自适应
                 {0xFF1F6FEB, cols[2]}, {0xFF3D7BD9, cols[2]},
                 {0xFF2F6FEB, cols[2]}, {0xFF6FB3E8, cols[2]},
@@ -6703,10 +6919,13 @@ public class MainActivity extends Activity {
     }
 
     private void applyTopColors(boolean light) {
-        // v9.101：Material 浅色页面文字用不透明灰蓝（小字清晰）；渐变模式维持原色值
+        // v10.1.3：浅色下一律用**实色**小字 ——
+        // 此前仅极简模式用实色，渐变模式的小字是 0xD9/0xC0（约 70~85% 不透明），
+        // 压在明亮渐变（尤其日出日落、来源、地区/IP 这几处）上对比度明显不足。
+        // 这里把两种风格统一：主字深蓝黑、次要字中蓝灰、提示字浅蓝灰，全部不透明。
         final int cMain = light ? 0xFF1F2A36 : 0xFFFFFFFF;
-        final int cSub  = light ? (materialHome ? 0xFF5C6B7A : 0xD95C6B7A) : 0xE6FFFFFF;
-        final int cWeak = light ? (materialHome ? 0xE65C6B7A : 0xC05C6B7A) : 0xB3FFFFFF;
+        final int cSub  = light ? 0xFF4A5866 : 0xE6FFFFFF;
+        final int cWeak = light ? 0xFF64717F : 0xB3FFFFFF;
         cityText.setTextColor(cMain);
         tempText.setTextColor(cMain);
         if (bigIconTv != null) bigIconTv.setTextColor(cMain);   // v9.93：大天气图案随背景亮度

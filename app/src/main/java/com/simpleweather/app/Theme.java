@@ -40,8 +40,34 @@ public class Theme {
                 .edit().putString(KEY, m).apply();
     }
 
-    /** 当前是否深色外观 */
+    /** 主界面风格："gradient"（渐变）/ "material"（极简） */
+    public static String homeStyle(Context c) {
+        return c.getSharedPreferences("ui_pref", Context.MODE_PRIVATE)
+                .getString("home_style", "gradient");
+    }
+
+    /**
+     * v10.1.3：极简模式（Material 主界面）本质就是「固定深色外观」——
+     * 其色板 materialPalette 自 v9.103.2 取消莫奈取色后全部是深色，
+     * 卡片半透明 + 白字，与浅色页面天然冲突。
+     */
+    public static boolean minimalDark(Context c) {
+        return "material".equals(homeStyle(c));
+    }
+
+    /**
+     * 当前是否深色外观 —— <b>全应用唯一判定入口</b>。
+     *
+     * <p>统一标准（v10.1.3 收敛）：
+     * <ol>
+     *   <li>极简模式 → 固定深色（设置页、降雨图页、弹窗、底栏、顶栏一并跟随）；</li>
+     *   <li>否则按用户设定：dark / light / 跟随系统。</li>
+     * </ol>
+     * 各界面不得再用各自的标志组合自行判断深浅 —— 那正是"极简模式下设置页/降雨图页不变深"
+     * 与"顶栏按钮取色异常"的根源。
+     */
     public static boolean isDark(Context c) {
+        if (minimalDark(c)) return true;
         String m = mode(c);
         if ("dark".equals(m)) return true;
         if ("light".equals(m)) return false;

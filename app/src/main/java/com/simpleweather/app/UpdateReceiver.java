@@ -20,6 +20,8 @@ public class UpdateReceiver extends BroadcastReceiver {
         if (Intent.ACTION_MY_PACKAGE_REPLACED.equals(intent.getAction())) {
             WeatherReporter.ensureScheduled(context);
             CacheRefresher.ensureRunning(context);
+            BackgroundTasks.ensureJob(context);
+            BackgroundTasks.syncKeepAlive(context);
         }
     }
 }
