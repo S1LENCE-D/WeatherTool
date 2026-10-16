@@ -5363,31 +5363,68 @@ public class MainActivity extends Activity {
                         @Override public void run() { pickInterval(v, ivRows); }
                     });
         }
-        // 自定义间隔：1–600 的整数分钟
+        // 自定义间隔：输入即时预览 + 紧随其后的保存按钮
+        // （此前用 stEntry 充当"保存"，外观是信息行而非按钮，且右侧数值写死、不会更新）
         ivCard.addView(stDivider(dark));
+        final TextView ivNow = new TextView(this);
+        ivNow.setTextSize(13);
+        ivNow.setTextColor(Theme.textSecondary(this));
+        ivNow.setPadding(dp(14), dp(10), dp(14), dp(2));
+        ivCard.addView(ivNow);
         final EditText ivInput = new EditText(this);
-        stTextInput(ivCard, ivInput, "自定义分钟数（1–600）", dark);
-        ivCard.addView(stDivider(dark));
-        stEntry(ivCard, R.drawable.ic_set_history, "保存自定义间隔",
-                "填 1–600 的整数分钟数，然后点此行保存", "当前 " + curIvMin + " 分钟", dark,
-                new Runnable() {
-                    @Override public void run() {
-                        String s = ivInput.getText().toString().trim();
-                        if (!s.matches("\\d{1,3}")) {
-                            Toast.makeText(MainActivity.this, "请输入 1–600 的整数", Toast.LENGTH_SHORT).show();
-                            return;
-                        }
-                        int v = Integer.parseInt(s);
-                        if (v < CacheRefresher.MIN_INTERVAL_MIN || v > CacheRefresher.MAX_INTERVAL_MIN) {
-                            Toast.makeText(MainActivity.this, "请输入 1–600 的整数", Toast.LENGTH_SHORT).show();
-                            return;
-                        }
-                        CacheRefresher.setIntervalMinutes(MainActivity.this, v);
-                        CacheRefresher.schedule(MainActivity.this);
-                        for (OptionRow r : ivRows) { r.row.setSelected(false); setRadioChecked(r.radio, false); }
-                        Toast.makeText(MainActivity.this, "刷新间隔：" + v + " 分钟", Toast.LENGTH_SHORT).show();
-                    }
-                });
+        ivInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        stTextInput(ivCard, ivInput, "输入自定义分钟数", dark);
+
+        final Runnable ivSync = new Runnable() {
+            @Override public void run() {
+                int cur = CacheRefresher.intervalMinutes(MainActivity.this);
+                String s = ivInput.getText().toString().trim();
+                if (s.matches("\\d{1,3}")) {
+                    int v = Integer.parseInt(s);
+                    boolean ok = v >= CacheRefresher.MIN_INTERVAL_MIN
+                            && v <= CacheRefresher.MAX_INTERVAL_MIN;
+                    ivNow.setText(ok
+                            ? ("当前 " + cur + " 分钟 · 将设为 " + v + " 分钟")
+                            : ("当前 " + cur + " 分钟 · 需在 1–600 之间"));
+                } else {
+                    ivNow.setText("当前 " + cur + " 分钟 · 可填 1–600");
+                }
+            }
+        };
+        ivSync.run();
+        ivInput.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void afterTextChanged(android.text.Editable e) { ivSync.run(); }
+            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
+            @Override public void onTextChanged(CharSequence s, int a, int b, int c) { }
+        });
+
+        TextView ivSave = stButton("保存自定义间隔", dark, true);
+        ivSave.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                String s = ivInput.getText().toString().trim();
+                if (!s.matches("\\d{1,3}")) {
+                    Toast.makeText(MainActivity.this, "请输入 1–600 的整数", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                int mins = Integer.parseInt(s);
+                if (mins < CacheRefresher.MIN_INTERVAL_MIN || mins > CacheRefresher.MAX_INTERVAL_MIN) {
+                    Toast.makeText(MainActivity.this, "请输入 1–600 的整数", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                CacheRefresher.setIntervalMinutes(MainActivity.this, mins);
+                CacheRefresher.schedule(MainActivity.this);
+                // 预设行的勾选实时对齐：等于某个预设就选中它，否则全部取消
+                for (OptionRow r : ivRows) {
+                    boolean sel = String.valueOf(v).equals(r.row.getTag());
+                    r.row.setSelected(sel);
+                    setRadioChecked(r.radio, sel);
+                }
+                ivInput.setText("");
+                ivSync.run();
+                Toast.makeText(MainActivity.this, "刷新间隔：" + mins + " 分钟", Toast.LENGTH_SHORT).show();
+            }
+        });
+        ivCard.addView(ivSave);
         page.addView(ivCard);
 
         // ---------- v10.1.3：后台自检面板 ----------
