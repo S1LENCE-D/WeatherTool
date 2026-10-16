@@ -14,7 +14,7 @@ import android.content.Intent;
  * ③ 气象预警检查（见 AlertChecker.check，开关开启时）。
  *
  * 实现要点：
- *  - 三项工作在同一个 goAsync 线程内完成，**不启动任何服务**：
+ *  - 三项工作在同一个 goAsync 线程内完成，不启动任何服务：
  *    旧版在这里 startService / startForegroundService，被 Android 8+/12+ 的后台
  *    限制拒绝并抛异常（未捕获 → 后台崩溃，功能静默失效）。
  *  - 无通知无权限：纯静默更新，用户无感；
@@ -31,7 +31,7 @@ public final class CacheRefresher {
      * v10.1.3：<b>快速检查模式</b> —— 每 30 秒跑一轮后台流程，<b>仅供验证自启动/后台链路</b>。
      * 周期任务（JobScheduler/WorkManager）最短间隔是 15 分钟，做不了 30 秒，
      * 所以这里改用「一次性闹钟 + 每次触发后自己续下一次」的接力写法；
-     * 接力由**系统**持有，因此划掉应用后仍然会到点唤醒 —— 这样才测得出自启动到底通不通。
+     * 接力由系统持有，因此划掉应用后仍然会到点唤醒 —— 这样才测得出自启动到底通不通。
      * 代价：费电、频繁请求接口，验证完请关掉。
      */
     public static final long FAST_INTERVAL_MS = 30L * 1000;
@@ -50,9 +50,29 @@ public final class CacheRefresher {
                 .edit().putBoolean("fast_check", on).apply();
     }
 
-    /** 当前心跳间隔 */
+    /** 默认心跳间隔（分钟）。与"快速检查"是两个独立设置项 */
+    public static final int DEFAULT_INTERVAL_MIN = 15;
+
+    /** 可选间隔（分钟）：15 / 30 / 60 / 120 */
+    public static final int[] INTERVAL_OPTIONS = {15, 30, 60, 120};
+
+    public static int intervalMinutes(Context c) {
+        return c.getSharedPreferences("bg_prefs", Context.MODE_PRIVATE)
+                .getInt("interval_min", DEFAULT_INTERVAL_MIN);
+    }
+
+    public static void setIntervalMinutes(Context c, int minutes) {
+        int v = minutes;
+        boolean ok = false;
+        for (int o : INTERVAL_OPTIONS) if (o == v) ok = true;
+        if (!ok) v = DEFAULT_INTERVAL_MIN;
+        c.getSharedPreferences("bg_prefs", Context.MODE_PRIVATE)
+                .edit().putInt("interval_min", v).apply();
+    }
+
+    /** 当前心跳间隔：快速检查优先，否则取用户设置的分钟数 */
     public static long intervalMs(Context c) {
-        return fastCheck(c) ? FAST_INTERVAL_MS : INTERVAL_MS;
+        return fastCheck(c) ? FAST_INTERVAL_MS : (intervalMinutes(c) * 60_000L);
     }
 
     /** 应用启动 / 开机：只要曾成功拉取过天气（有缓存）就开启后台刷新 */
@@ -74,7 +94,7 @@ public final class CacheRefresher {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         // 正常模式：沿用非精确周期闹钟，首轮延迟 60 秒避开启动高峰
         am.setInexactRepeating(AlarmManager.RTC_WAKEUP,
-                System.currentTimeMillis() + 60_000, INTERVAL_MS, pi);
+                System.currentTimeMillis() + 60_000, intervalMs(ctx), pi);
     }
 
     /**

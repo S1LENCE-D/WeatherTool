@@ -23,7 +23,7 @@ import android.os.Build;
  */
 public final class BackgroundTasks {
 
-    /** 两条触发路径最短间隔：三条路径都指到这里，靠它去重，避免同一轮通知发两遍 */
+    /** 去重下限（间隔的 2/3）：三条路径都指到这里，靠它避免同一轮通知发两遍 */
     private static final long MIN_INTERVAL_MS = 10L * 60 * 1000;
     private static final String PREFS = "bg_prefs";
     private static final String KEY_LAST_RUN = "last_run";
@@ -40,15 +40,18 @@ public final class BackgroundTasks {
                     context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
             long last = sp.getLong(KEY_LAST_RUN, 0L);
             long now = System.currentTimeMillis();
-            // 快速检查模式下门槛降到 20 秒：既不挡 30 秒节奏，又能拦住同一次触发被多路径重复执行
-            long minInterval = CacheRefresher.fastCheck(context) ? 20_000L : MIN_INTERVAL_MS;
+            // 门槛随间隔推导，默认 15 分钟对应 10 分钟（与旧行为一致）；
+            // 不随间隔调整的话，把间隔调短也会被这里挡掉。
+            long minInterval = CacheRefresher.fastCheck(context)
+                    ? 20_000L
+                    : Math.max(60_000L, CacheRefresher.intervalMs(context) * 2 / 3);
             if (last != 0 && now - last < minInterval) {
                 Diag.i("BG流程: 距上次仅 " + ((now - last) / 1000) + "s，本轮跳过（多路径去重）");
                 return;
             }
             sp.edit().putLong(KEY_LAST_RUN, now).apply();
         } catch (Throwable ignored) { }
-        Diag.i("BG流程: 开始（15 分钟周期）");
+        Diag.i("BG流程: 开始");
 
         // ---------- ② 定位 ----------
         double lat = 0, lng = 0;

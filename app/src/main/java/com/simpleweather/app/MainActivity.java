@@ -168,7 +168,7 @@ public class MainActivity extends Activity {
     private RainMapView rainPage;
     private boolean rainFromRight = true;   // 降雨图页本次是从右侧滑入的（出场方向随之）
     private View rainPageRoot;              // 内嵌页根视图（用于补顶部 inset）
-    // v10.2：设置页改为**同窗口内嵌页**（不再用对话框窗口）——
+    // v10.2：设置页改为同窗口内嵌页（不再用对话框窗口）——
     // 三页同处一个窗口，底栏天然压在其上、可点，切换才能连续不打架。
     private android.view.ViewGroup settingsPage;   // 设置页容器（rootFrame 内，在内嵌页之上、底栏之下）
     private boolean settingsPageOpen = false;   // 设置页是否处于打开状态
@@ -772,7 +772,7 @@ public class MainActivity extends Activity {
 
     /**
      * v10.1：立即推送一次天气简报（「测试推送」/ 授权返回后自动补发共用）。
-     * 直接在子线程里完成拉取与通知，**不再启动前台服务**——前台启动服务虽然合法，
+     * 直接在子线程里完成拉取与通知，不再启动前台服务——前台启动服务虽然合法，
      * 但会多出一条占位通知与 5 秒窗口，没必要。
      */
     private void pushReportNow() {
@@ -812,7 +812,7 @@ public class MainActivity extends Activity {
             sb.append(WeatherReporter.reportedToday(this) ? "（今日已推送）" : "（今日尚未推送）");
         }
         if (Build.VERSION.SDK_INT >= 31 && !WeatherReporter.canExactAlarms(this)) {
-            sb.append("\n⚠ 未开启「闹钟与提醒」权限：推送时刻会被系统推迟，点此行开启");
+            sb.append("\n未开启「闹钟与提醒」权限：推送时刻会被系统推迟，点此行开启");
             hint.setTextColor(0xFFF2A65A);
             hint.setOnClickListener(new View.OnClickListener() {
                 @Override
@@ -858,7 +858,7 @@ public class MainActivity extends Activity {
         android.app.NotificationManager nm =
                 (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (nm != null && !nm.areNotificationsEnabled()) {
-            Toast.makeText(this, "系统通知已关闭，定时提醒无法送达；请允许本应用发送通知",
+            Toast.makeText(this, "请开启通知权限，否则定时提醒无法送达",
                     Toast.LENGTH_LONG).show();
             try {
                 Intent i = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
@@ -947,7 +947,7 @@ public class MainActivity extends Activity {
                         hour[0] = h;
                         minute[0] = m;
                         timeText.setText(String.format(Locale.US, "%02d:%02d", h, m));
-                        // v10.1.3 修复：选定的时刻**无论开关是否打开都要写进存储**。
+                        // v10.1.3 修复：选定的时刻无论开关是否打开都要写进存储。
                         // 旧逻辑只在开关打开时才 setEnabled(...)，于是"先选时间再开开关"、
                         // 或"选完直接关掉面板"这两种走法，选的时刻都被丢掉 ——
                         // 面板重开后仍显示旧值，用户以为设好了，实际调度用的还是旧时刻。
@@ -4295,7 +4295,7 @@ public class MainActivity extends Activity {
 
     /** v9.97：reuse 非空时复用已有 Dialog 就地重建面板——UI 主题/风格切换不关闭面板、不返回主界面 */
     private void showSettingsDialog(final String openDetail, final Dialog reuse) {
-        // v10.2（重写）：设置页不再是独立对话框窗口，而是与主页/降雨图**同窗口的内嵌页**
+        // v10.2（重写）：设置页不再是独立对话框窗口，而是与主页/降雨图同窗口的内嵌页
         // （挂进 settingsPage 容器）。好处：底栏天然压在其上、可直接点；三页共用同一套
         // 「页面带」转场；不再有窗口动画与视图动画打架导致的退出方向/效果异常。
         // 参数沿用旧签名：reuse 非空即"面板已打开时就地重建"。
@@ -4405,7 +4405,7 @@ public class MainActivity extends Activity {
         root.addView(detailPage);
 
         // v10.2：内容不再交给对话框窗口（面板是内嵌页），在方法末尾挂进 settingsPage；
-        // 曾经这里残留的 d.setContentView(root) 会让 root 先有父视图，
+        // root 若已属于其它父视图，再次挂载会抛 IllegalStateException；
         // 随后 addView 到容器时抛 "The specified child already has a parent"
         // v9.87.4：全屏设置面板——主题底色铺满全屏（含状态栏与底部手势条区域）
         GradientDrawable sheetBg = new GradientDrawable();
@@ -4930,7 +4930,7 @@ public class MainActivity extends Activity {
             s.setText(sub);
             s.setTextSize(12);
             s.setTextColor((accent & 0x00FFFFFF) | 0xC2000000);
-            // v10.1：宽度必须是 MATCH_PARENT —— 原来用 WRAP_CONTENT，在横向分页容器里
+            // v10.1：宽度须为 MATCH_PARENT；WRAP_CONTENT 在横向分页容器里
             // （测量宽度不受约束）长说明不会换行，会横向溢出压到相邻内容上（表现就是"说明与按钮重叠"）
             LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -4982,7 +4982,7 @@ public class MainActivity extends Activity {
             s.setText(sub);
             s.setTextSize(11);
             s.setTextColor(Theme.textSecondary(this));
-            // v10.1：副标题必须约束到列宽内 —— 原来用 WRAP_CONTENT，长句在某些测量路径下
+            // v10.1：副标题须约束到列宽内；WRAP_CONTENT 下长句在某些测量路径中
             // 不换行、横向溢出压到右侧控件上（外观页「悬浮底栏」两项就是这么被发现重叠的）
             LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -5092,7 +5092,7 @@ public class MainActivity extends Activity {
             s.setText(sub);
             s.setTextSize(11);
             s.setTextColor(Theme.textSecondary(this));
-            // v10.1：副标题必须约束到列宽内 —— 原来用 WRAP_CONTENT，长句在某些测量路径下
+            // v10.1：副标题须约束到列宽内；WRAP_CONTENT 下长句在某些测量路径中
             // 不换行、横向溢出压到右侧控件上（外观页「悬浮底栏」两项就是这么被发现重叠的）
             LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -5246,7 +5246,7 @@ public class MainActivity extends Activity {
         // v10.1.3：极简模式是固定深色外观，此时深浅选择对界面无效 —— 明说，不让用户白点
         if (Theme.minimalDark(this)) {
             Theme.setMode(this, m);
-            Toast.makeText(this, "极简模式为固定深色外观；切回「渐变」后深浅设置即生效",
+            Toast.makeText(this, "极简模式固定深色；切回渐变可改深浅",
                     Toast.LENGTH_LONG).show();
             return;
         }
@@ -5437,9 +5437,23 @@ public class MainActivity extends Activity {
                 BackgroundTasks.syncKeepAlive(MainActivity.this);
                 Toast.makeText(MainActivity.this,
                         on ? "已开启快速检查：每 30 秒跑一轮（验证完记得关掉）"
-                           : "已恢复为每 15 分钟一轮", Toast.LENGTH_LONG).show();
+                           : "已关闭快速检查，恢复为设定的刷新间隔", Toast.LENGTH_LONG).show();
             }
         });
+        // 后台刷新间隔：与"快速检查"是两个独立设置项（后者仅供验证自启动）
+        chkCard.addView(stDivider(dark));
+        final int curIvMin = CacheRefresher.intervalMinutes(this);
+        final OptionRow[] ivRows = new OptionRow[4];
+        final int[] ivVals = {15, 30, 60, 120};
+        final String[] ivSubs = {"后台刷新间隔 · 默认，间隔越短越耗电", "更及时", "较省电", "最省电"};
+        for (int k = 0; k < ivVals.length; k++) {
+            final int v = ivVals[k];
+            if (k > 0) chkCard.addView(stDivider(dark));
+            ivRows[k] = stOption(chkCard, String.valueOf(v), R.drawable.ic_set_history,
+                    "每 " + v + " 分钟", ivSubs[k], dark, curIvMin == v, pager, new Runnable() {
+                        @Override public void run() { pickInterval(v, ivRows); }
+                    });
+        }
         page.addView(chkCard);
 
         // 小米 / HyperOS 专项引导：这三项缺一项，重启后都可能不再准时推送
@@ -5469,6 +5483,19 @@ public class MainActivity extends Activity {
             boolean sel = m.equals(r.row.getTag());
             r.row.setSelected(sel);
             setRadioChecked(r.radio, sel);   // v9.92：选中缩放回弹
+        }
+    }
+
+    /** 后台刷新间隔：写入偏好并立刻按新间隔重排心跳 */
+    private void pickInterval(final int minutes, final OptionRow[] rows) {
+        CacheRefresher.setIntervalMinutes(this, minutes);
+        CacheRefresher.schedule(this);
+        LogFile.i("Main", "后台刷新间隔 -> " + minutes + " 分钟");
+        Toast.makeText(this, "刷新间隔：" + minutes + " 分钟", Toast.LENGTH_SHORT).show();
+        for (OptionRow r : rows) {
+            boolean sel = minutes == Integer.parseInt((String) r.row.getTag());
+            r.row.setSelected(sel);
+            setRadioChecked(r.radio, sel);
         }
     }
 
@@ -5750,7 +5777,7 @@ public class MainActivity extends Activity {
             @Override public void onClick(View v) {
                 new AlertDialog.Builder(MainActivity.this)
                         .setTitle("恢复默认天气源？")
-                        .setMessage("将清除已保存的 API Key，恢复默认源（Open-Meteo）。")
+                        .setMessage("将清除已保存的 API Key，恢复默认源（Open-Meteo）")
                         .setNegativeButton("取消", null)
                         .setPositiveButton("恢复", new DialogInterface.OnClickListener() {
                             @Override public void onClick(DialogInterface di, int which) {
@@ -5804,8 +5831,8 @@ public class MainActivity extends Activity {
     // ==================== v10.1：底部悬浮栏 ====================
 
     /**
-     * v10.1：按底栏相对位置切页 —— 目标页在当前位置**右侧**则自右滑入、旧页向左让位；
-     * 在**左侧**则自左滑入、旧页向右让位。设置是整页浮层（最右），故自右入、
+     * v10.1：按底栏相对位置切页 —— 目标页在当前位置右侧则自右滑入、旧页向左让位；
+     * 在左侧则自左滑入、旧页向右让位。设置是整页浮层（最右），故自右入、
      * 回到左侧页面时向左滑出。
      */
     /**
@@ -5897,7 +5924,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** 读取某页**实时位置**（无则 0） */
+    /** 读取某页实时位置（无则 0） */
     private float pageX(int index) {
         View v = pageViewOf(index);
         return v == null ? 0f : v.getTranslationX();
@@ -6005,7 +6032,7 @@ public class MainActivity extends Activity {
         final int w = pageW();
         if (!settingsPageOpen) {
             pageBeforeSettings = currentPage;
-            // 方向与格数都读**实时位置**：主页过来 2 格、降雨图过来 1 格
+            // 方向与格数都读实时位置：主页过来 2 格、降雨图过来 1 格
             settingsEnterDir = dirBetween(pageBeforeSettings, PAGE_SETTINGS);
             settingsSpan = Math.max(1, spanBetween(pageBeforeSettings, PAGE_SETTINGS));
         }
@@ -6035,7 +6062,7 @@ public class MainActivity extends Activity {
         final int back = pageBeforeSettings;
         settingsPageOpen = false;
         currentPage = target;
-        // 面板按"开启时的格数"原路退出；方向 = 目标页所在侧的**反面**（即它自己那一侧）
+        // 面板按"开启时的格数"原路退出；方向 = 目标页所在侧的反面（即它自己那一侧）
         final int exitDir = -dirBetween(PAGE_SETTINGS, target);
         slideTo(settingsPage, exitDir * Math.max(1, settingsSpan) * (float) w, new Runnable() {
             @Override public void run() {
@@ -6048,7 +6075,7 @@ public class MainActivity extends Activity {
             }
         });
         if (target != back) {
-            // 切到另一个内容页：方向/格数同样读**实时位置**
+            // 切到另一个内容页：方向/格数同样读实时位置
             // （例：主页在左、降雨图在右 → 降雨图自右滑入）
             final int dir = dirBetween(back, target);
             final int span = spanBetween(back, target);
@@ -6282,7 +6309,7 @@ public class MainActivity extends Activity {
     private int solidSnapColor = 0;
 
     /**
-     * v10.1：顶栏三个按钮（查询城市 / 刷新 / 设置）统一为**液态玻璃圆形**：
+     * v10.1：顶栏三个按钮（查询城市 / 刷新 / 设置）统一为液态玻璃圆形：
      * 与卡片、底栏同一套做法 —— 背景模糊快照按窗口坐标裁切 + 顶部柔光 + 细描边；
      * 极简模式（无渐变快照）退化为半透明圆片；水波反馈改挂 foreground（背景已被玻璃占用）。
      */
@@ -6421,7 +6448,7 @@ public class MainActivity extends Activity {
         for (TextView t : barLabels) t.setTextColor(cSub);
         updateBarSelection(false);   // 覆盖当前页的高亮色（整组重铺，不做过渡）
 
-        // v10.1：玻璃**始终保留质感**，只是"取色"跟随所在页面 ——
+        // v10.1：玻璃始终保留质感，只是"取色"跟随所在页面 ——
         // 渐变主页用背景快照；极简模式 / 降雨图 / 设置页这类纯色底换成对应的 1×1 同色快照，
         // 于是高光、描边、悬浮阴影、半透都在，颜色也不会跟背景打架。
         Bitmap snap = (solidBg != 0) ? solidSnapshot(solidBg) : glassCache;
@@ -6919,7 +6946,7 @@ public class MainActivity extends Activity {
     }
 
     private void applyTopColors(boolean light) {
-        // v10.1.3：浅色下一律用**实色**小字 ——
+        // v10.1.3：浅色下一律用实色小字 ——
         // 此前仅极简模式用实色，渐变模式的小字是 0xD9/0xC0（约 70~85% 不透明），
         // 压在明亮渐变（尤其日出日落、来源、地区/IP 这几处）上对比度明显不足。
         // 这里把两种风格统一：主字深蓝黑、次要字中蓝灰、提示字浅蓝灰，全部不透明。
