@@ -31,7 +31,7 @@
   export ANDROID_HOME=/opt/android-sdk ANDROID_SDK_ROOT=/opt/android-sdk
   ./gradlew :app:assembleRelease --no-daemon --console=plain
   ```
-- 期望 `BUILD SUCCESSFUL`，产物 `app/build/outputs/apk/release/app-release-unsigned.apk`（约 520–545 KB）。
+- 期望 `BUILD SUCCESSFUL`，产物 `app/build/outputs/apk/release/app-release-unsigned.apk`（约 550–560 KB）。
 - 只改文档时可跳过构建，但汇报中须注明"未构建验证"。
 
 ### 5. 不碰发版开关
