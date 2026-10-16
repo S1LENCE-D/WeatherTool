@@ -149,13 +149,13 @@ public final class WeatherReporter {
      * <p><b>v10.1 修正</b>：旧注释称「setAlarmClock 免权限」，这在 Android 12+ 是<b>错的</b>——
      * 官方文档明确：`setExact()` / `setExactAndAllowWhileIdle()` / `setAlarmClock()`
      * 三者都需要 SCHEDULE_EXACT_ALARM，缺权限一律抛 SecurityException。
-     * 旧链路在缺权限时会一路降级到 setInexactRepeating（**不精确**的每日重复闹钟），
+     * 旧链路在缺权限时会一路降级到 setInexactRepeating（不精确的每日重复闹钟），
      * 表现就是「到点了没响 / 响得不准」。
      *
      * <p>现在的降级顺序（每一级都明确说清代价）：
      * <ol>
      *   <li>有精确闹钟权限 → {@code setExactAndAllowWhileIdle}（准点、Doze 可唤醒）；</li>
-     *   <li>无精确闹钟权限 → {@code setAndAllowWhileIdle}（**可能被系统小幅推迟**，
+     *   <li>无精确闹钟权限 → {@code setAndAllowWhileIdle}（可能被系统小幅推迟，
      *       但仍是 doze-tolerant 的一次性闹钟，比 setInexactRepeating 可靠）
      *       —— 同时应在 App 内引导用户去开启「闹钟与提醒」权限；</li>
      *   <li>任何异常 → {@code setInexactRepeating} 兜底（最差情况，聊胜于无）。</li>
@@ -245,7 +245,7 @@ public final class WeatherReporter {
      * 已过今日计划时刻 && 今天定时播报尚未执行 → 补一次播报并立即写标记，
      * 之后的心跳检测到「已播报」自动跳过。
      *
-     * <p>v10.1：标记改由 {@link ReportRunner} 在**通知真正送出之后**才写；手动「立即播报」
+     * <p>v10.1：标记改由 {@link ReportRunner} 在通知真正送出之后才写；手动「立即播报」
      * 走的也是 ReportRunner，因此同样会写标记（心跳补发据此跳过）。定时闹钟本身不看标记，
      * 到点仍会照常推送。
      */

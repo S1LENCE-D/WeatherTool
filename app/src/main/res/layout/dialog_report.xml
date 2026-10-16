@@ -212,7 +212,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:text="通知权限用于天气推送；自启动需在系统设置中允许本应用，重启手机后仍能准点推送。"
+        android:text="通知权限用于天气推送；自启动需在系统设置中允许本应用，重启手机后仍能准点推送"
         android:textColor="#55FFFFFF"
         android:textSize="12sp"
         android:lineSpacingExtra="4dp" />

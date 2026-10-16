@@ -9,7 +9,7 @@ import java.io.File;
  * 天气数据本地缓存（SharedPreferences）。
  * 打开 APP 时先渲染上次成功数据，弱网 / 断网 / 定位失败也不至于空白。
  *
- * v9.73：每次成功拉取新数据后顺带清理历史缓存（WebView webcache、过期临时文件、
+ * v9.73：每次成功拉取新数据后清理历史缓存（WebView webcache、过期临时文件、
  * 崩溃日志），防止 App 越用越大。清理带 6 小时节流，避免频繁 IO。
  */
 public class WeatherCache {

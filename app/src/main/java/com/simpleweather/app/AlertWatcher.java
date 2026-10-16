@@ -92,11 +92,11 @@ public final class AlertWatcher {
     /**
      * v10.1：启动一次预警检查。
      *
-     * <p>**不再启动服务**——旧实现 `ctx.startService(new Intent(ctx, AlertWatchService.class))`
+     * <p>不再启动服务——旧实现 `ctx.startService(new Intent(ctx, AlertWatchService.class))`
      * 在后台（15 分钟心跳）调用时会抛
      * {@code IllegalStateException: Not allowed to start service ... app is in background}
      * （Android 8+ 限制），异常在接收器里未捕获 → 进程崩溃、预警检查从未真正执行；
-     * 只有用户在设置里打开开关时的**前台**首查能跑，所以看起来「开了一次就再也没动静」。
+     * 只有用户在设置里打开开关时的前台首查能跑，所以看起来「开了一次就再也没动静」。
      *
      * <p>现在直接在子线程里完成检查。后台心跳里请直接调用
      * {@link AlertChecker#check(Context)}（在同一 goAsync 作用域内）。
