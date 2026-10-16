@@ -2769,13 +2769,14 @@ public class MainActivity extends Activity {
                     + "?latitude=" + lat + "&longitude=" + lng + "&localityLanguage=zh-CN";
             JSONObject j = WeatherApi.getJson(url);
             c = j.optString("city", "");
+            LogFile.i("Geo", "BigDataCloud 返回 city=" + c + " prov=" + j.optString("principalSubdivision", "")
+                    + " loc=" + j.optString("locality", ""));
             if (c.isEmpty()) c = j.optString("locality", "");
             if (c.isEmpty()) c = j.optString("principalSubdivision", "");
-            // 不再回退到国名：无 city 时回退到省级即可，退回国家名只会显示成"中国"，
-            // 观感上属于"地区不正确"。省名也没有时保持空串，由调用方沿用上一次地名。
+            // 不回退到国名：无 city 时止于省级；退回国家名只会显示成"中国"
             prov = j.optString("principalSubdivision", "");
             dist = j.optString("locality", "");
-        } catch (Exception ignored) { }
+        } catch (Exception e) { LogFile.i("Geo", "反查失败: " + e); }
         if (c == null || c.isEmpty()) {
             try {
                 String url = "https://nominatim.openstreetmap.org/reverse"
@@ -2792,8 +2793,9 @@ public class MainActivity extends Activity {
                     if (dist.isEmpty()) dist = addr.optString("town", "");
                     if (dist.isEmpty()) dist = addr.optString("city", "");
                 }
-            } catch (Exception ignored) { }
+            } catch (Exception e) { LogFile.i("Geo", "反查失败: " + e); }
         }
+        LogFile.i("Geo", "最终采用 city=" + c + " prov=" + prov + " dist=" + dist);
         if (c != null && !c.isEmpty()) {
             cityName = c;
             lastLat = lat;
