@@ -2766,19 +2766,20 @@ public class MainActivity extends Activity {
         String prov = null, dist = null;
         try {
             String url = "https://api.bigdatacloud.net/data/reverse-geocode-client"
-                    + "?latitude=" + lat + "&longitude=" + lng + "&localityLanguage=zh";
+                    + "?latitude=" + lat + "&longitude=" + lng + "&localityLanguage=zh-CN";
             JSONObject j = WeatherApi.getJson(url);
             c = j.optString("city", "");
             if (c.isEmpty()) c = j.optString("locality", "");
             if (c.isEmpty()) c = j.optString("principalSubdivision", "");
-            if (c.isEmpty()) c = j.optString("countryName", "");
+            // 不再回退到国名：无 city 时回退到省级即可，退回国家名只会显示成"中国"，
+            // 观感上属于"地区不正确"。省名也没有时保持空串，由调用方沿用上一次地名。
             prov = j.optString("principalSubdivision", "");
             dist = j.optString("locality", "");
         } catch (Exception ignored) { }
         if (c == null || c.isEmpty()) {
             try {
                 String url = "https://nominatim.openstreetmap.org/reverse"
-                        + "?lat=" + lat + "&lon=" + lng + "&format=json&accept-language=zh";
+                        + "?lat=" + lat + "&lon=" + lng + "&format=json&accept-language=zh-CN";
                 JSONObject j = WeatherApi.getJson(url);
                 JSONObject addr = j.optJSONObject("address");
                 if (addr != null) {
@@ -5348,6 +5349,47 @@ public class MainActivity extends Activity {
             }
         });
 
+        // ---------- 后台刷新频率 ----------
+        stSection(page, "后台刷新频率", "间隔越短越及时，也越耗电", dark);
+        LinearLayout ivCard = stCard(dark);
+        final int curIvMin = CacheRefresher.intervalMinutes(this);
+        final OptionRow[] ivRows = new OptionRow[CacheRefresher.INTERVAL_OPTIONS.length];
+        final String[] ivSubs = {"默认，间隔越短越耗电", "更及时", "较省电", "最省电"};
+        for (int k = 0; k < CacheRefresher.INTERVAL_OPTIONS.length; k++) {
+            final int v = CacheRefresher.INTERVAL_OPTIONS[k];
+            if (k > 0) ivCard.addView(stDivider(dark));
+            ivRows[k] = stOption(ivCard, String.valueOf(v), R.drawable.ic_set_history,
+                    "每 " + v + " 分钟", ivSubs[k], dark, curIvMin == v, pager, new Runnable() {
+                        @Override public void run() { pickInterval(v, ivRows); }
+                    });
+        }
+        // 自定义间隔：1–600 的整数分钟
+        ivCard.addView(stDivider(dark));
+        final EditText ivInput = new EditText(this);
+        stTextInput(ivCard, ivInput, "自定义分钟数（1–600）", dark);
+        ivCard.addView(stDivider(dark));
+        stEntry(ivCard, R.drawable.ic_set_history, "保存自定义间隔",
+                "填 1–600 的整数分钟数，然后点此行保存", "当前 " + curIvMin + " 分钟", dark,
+                new Runnable() {
+                    @Override public void run() {
+                        String s = ivInput.getText().toString().trim();
+                        if (!s.matches("\\d{1,3}")) {
+                            Toast.makeText(MainActivity.this, "请输入 1–600 的整数", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        int v = Integer.parseInt(s);
+                        if (v < CacheRefresher.MIN_INTERVAL_MIN || v > CacheRefresher.MAX_INTERVAL_MIN) {
+                            Toast.makeText(MainActivity.this, "请输入 1–600 的整数", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        CacheRefresher.setIntervalMinutes(MainActivity.this, v);
+                        CacheRefresher.schedule(MainActivity.this);
+                        for (OptionRow r : ivRows) { r.row.setSelected(false); setRadioChecked(r.radio, false); }
+                        Toast.makeText(MainActivity.this, "刷新间隔：" + v + " 分钟", Toast.LENGTH_SHORT).show();
+                    }
+                });
+        page.addView(ivCard);
+
         // ---------- v10.1.3：后台自检面板 ----------
         // HyperOS/MIUI 这类激进 ROM 上，"哪一项没开"必须一眼可查、一手可改，
         // 否则用户只能看到"开关是开的、通知就是不来"。
@@ -5440,20 +5482,6 @@ public class MainActivity extends Activity {
                            : "已关闭快速检查，恢复为设定的刷新间隔", Toast.LENGTH_LONG).show();
             }
         });
-        // 后台刷新间隔：与"快速检查"是两个独立设置项（后者仅供验证自启动）
-        chkCard.addView(stDivider(dark));
-        final int curIvMin = CacheRefresher.intervalMinutes(this);
-        final OptionRow[] ivRows = new OptionRow[4];
-        final int[] ivVals = {15, 30, 60, 120};
-        final String[] ivSubs = {"后台刷新间隔 · 默认，间隔越短越耗电", "更及时", "较省电", "最省电"};
-        for (int k = 0; k < ivVals.length; k++) {
-            final int v = ivVals[k];
-            if (k > 0) chkCard.addView(stDivider(dark));
-            ivRows[k] = stOption(chkCard, String.valueOf(v), R.drawable.ic_set_history,
-                    "每 " + v + " 分钟", ivSubs[k], dark, curIvMin == v, pager, new Runnable() {
-                        @Override public void run() { pickInterval(v, ivRows); }
-                    });
-        }
         page.addView(chkCard);
 
         // 小米 / HyperOS 专项引导：这三项缺一项，重启后都可能不再准时推送

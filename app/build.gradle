@@ -15,17 +15,6 @@ android {
         versionName '10.1'
     }
 
-    /**
-     * 两个发行版本（applicationId 相同，按系统版本择一安装）：
-     *   full —— 含 Smartspacer 插件 SDK；该 SDK 要求 API 29，故本版本 minSdk 29
-     *   lite —— 不含任何第三方 SDK，维持 minSdk 24（Android 7.0 起可用）
-     */
-    flavorDimensions 'sdk'
-    productFlavors {
-        full { dimension 'sdk'; minSdk 29 }
-        lite { dimension 'sdk'; minSdk 24 }
-    }
-
     signingConfigs {
         release {
             // v9.88：Actions 未配置 secrets 时 env 为空串（非 null），需判非空
@@ -78,9 +67,6 @@ android {
 }
 
 dependencies {
-    // 仅 full 版引入：lite 版保持零第三方运行时依赖
-    fullImplementation 'com.kieronquinn.smartspacer:sdk-plugin:1.1.2'
-
-    // lite 版无任何第三方运行时依赖；full 版见上方
+        // 纯 Java 实现，无第三方运行时依赖
 
 }

@@ -61,11 +61,12 @@ public final class CacheRefresher {
                 .getInt("interval_min", DEFAULT_INTERVAL_MIN);
     }
 
+    /** 自定义间隔允许范围（分钟）。预设之外的值由此输入 */
+    public static final int MIN_INTERVAL_MIN = 1;
+    public static final int MAX_INTERVAL_MIN = 600;
+
     public static void setIntervalMinutes(Context c, int minutes) {
-        int v = minutes;
-        boolean ok = false;
-        for (int o : INTERVAL_OPTIONS) if (o == v) ok = true;
-        if (!ok) v = DEFAULT_INTERVAL_MIN;
+        int v = Math.max(MIN_INTERVAL_MIN, Math.min(MAX_INTERVAL_MIN, minutes));
         c.getSharedPreferences("bg_prefs", Context.MODE_PRIVATE)
                 .edit().putInt("interval_min", v).apply();
     }
