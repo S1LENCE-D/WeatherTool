@@ -32,6 +32,18 @@ public final class BackgroundTasks {
 
     /** 跑一轮后台流程（调用方须在子线程；本方法不向外抛异常） */
     public static void run(Context context) {
+        run(context, true);
+    }
+
+    /**
+     * 广播接收器（goAsync）专用：<b>不做实时定位</b>，直接用上次成功坐标。
+     * 实时定位最长要等 GPS 约 30 秒，叠加反查/拉取会超出后台广播窗口。
+     */
+    public static void runFromReceiver(Context context) {
+        run(context, false);
+    }
+
+    private static void run(Context context, boolean allowLiveLocate) {
         if (context == null) return;
         // 去重：闹钟 / JobScheduler / 常驻服务三条路径可能前后脚触发，10 分钟内只跑一轮。
         // 时间戳落在 SharedPreferences 里而不是内存变量 —— 进程被杀后重启也不会漏判。
@@ -64,7 +76,7 @@ public final class BackgroundTasks {
                 city = WeatherReporter.manualCityName(context);
                 located = true;
                 Diag.i("BG流程: 使用手动城市 " + city);
-            } else {
+            } else if (allowLiveLocate) {
                 Locator locator = new Locator(context);
                 if (locator.hasPermission()) {
                     Location loc = locator.locateFast();
@@ -85,6 +97,8 @@ public final class BackgroundTasks {
                 } else {
                     Diag.i("BG流程: 无定位权限，改用上次坐标");
                 }
+            } else {
+                Diag.i("BG流程: 广播路径跳过实时定位，改用上次坐标");
             }
         } catch (Throwable t) {
             Diag.i("BG流程: 定位异常 " + t);

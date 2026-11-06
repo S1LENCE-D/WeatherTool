@@ -29,7 +29,8 @@ public class CacheRefreshReceiver extends BroadcastReceiver {
                     // v10.1.2：统一走 BackgroundTasks —— 拉天气 → 补播报 → 查预警 → 刷小组件，
                     // 每一步单独 try：小组件渲染异常不再把定时播报一起拖没
                     //（v10.1.1 就是把这步塞进同一个 try 里，抛出后整段跳过 → 后台通知失效）
-                    BackgroundTasks.run(context);
+                    // 广播路径不做实时定位（GPS 最长 30 秒，会撑爆 goAsync 窗口），用上次成功坐标
+                    BackgroundTasks.runFromReceiver(context);
                     // 按开关同步常驻服务；后台启动被系统拒绝时静默失败
                     BackgroundTasks.syncKeepAlive(context);
                 } catch (Throwable ignored) {
