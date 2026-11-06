@@ -5420,7 +5420,7 @@ public class MainActivity extends Activity {
                 CacheRefresher.schedule(MainActivity.this);
                 // 预设行的勾选实时对齐：等于某个预设就选中它，否则全部取消
                 for (OptionRow r : ivRows) {
-                    boolean sel = String.valueOf(v).equals(r.row.getTag());
+                    boolean sel = String.valueOf(mins).equals(r.row.getTag());
                     r.row.setSelected(sel);
                     setRadioChecked(r.radio, sel);
                 }
