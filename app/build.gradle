@@ -10,9 +10,9 @@ android {
         applicationId 'com.simpleweather.app'
         minSdk 24
         targetSdk 33
-        // v10.2：后台刷新频率可配置、定位地名修正；版本码递增，安装器按升级处理
-        versionCode 153
-        versionName '10.2'
+        // v10.2.1：定位地名统一简体 + 后台广播刷新与自检面板修复；版本码递增
+        versionCode 154
+        versionName '10.2.1'
     }
 
     signingConfigs {

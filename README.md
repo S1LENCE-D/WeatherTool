@@ -2,7 +2,7 @@
 
 > 极简、纯净、零广告的 Android 天气应用 · 作者：酷安 @Eartecd
 
-**当前版本 v10.2**（versionCode 153）· 单 APK 约 **558 KB** · 纯 Java 编写，无第三方运行时依赖
+**当前版本 v10.2.1**（versionCode 154）· 单 APK 约 **554 KB** · 纯 Java 编写，无第三方运行时依赖
 
 ---
 
