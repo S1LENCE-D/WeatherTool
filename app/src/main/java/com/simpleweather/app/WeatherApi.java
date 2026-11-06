@@ -287,21 +287,22 @@ public class WeatherApi {
      * 反向地理编码（简化版，v9.16 供定时通知服务用）：只取城市名。
      * BigDataCloud 优先，失败回退 Nominatim；都失败返回 ""。
      * 注：主页另有带省/区县与缓存的完整版 reverseGeocode。
+     * 不回退到国名：找不到市/区/省时宁可返回 ""（否则会把地名写成「中国」）。
+     * v10.2-fix：语言标签用 zh-Hans（zh-CN 会拿到繁体地名，小组件/通知同受影响）。
      */
     public static String reverseCity(double lat, double lng) {
         try {
             String url = "https://api.bigdatacloud.net/data/reverse-geocode-client"
-                    + "?latitude=" + lat + "&longitude=" + lng + "&localityLanguage=zh";
+                    + "?latitude=" + lat + "&longitude=" + lng + "&localityLanguage=zh-Hans";
             JSONObject j = getJson(url, 6000, 6000);
             String c = j.optString("city", "");
             if (c.isEmpty()) c = j.optString("locality", "");
             if (c.isEmpty()) c = j.optString("principalSubdivision", "");
-            if (c.isEmpty()) c = j.optString("countryName", "");
             if (!c.isEmpty()) return c;
         } catch (Exception ignored) { }
         try {
             String url = "https://nominatim.openstreetmap.org/reverse"
-                    + "?lat=" + lat + "&lon=" + lng + "&format=json&accept-language=zh";
+                    + "?lat=" + lat + "&lon=" + lng + "&format=json&accept-language=zh-Hans,zh";
             JSONObject j = getJson(url, 6000, 6000);
             JSONObject addr = j.optJSONObject("address");
             if (addr != null) {

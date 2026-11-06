@@ -2757,7 +2757,10 @@ public class MainActivity extends Activity {
     }
 
     /** 反向地理编码：BigDataCloud 优先，失败回退 Nominatim；带缓存；
-     *  同时填充 regionProvince / regionDistrict 供预警精确匹配使用。 */
+     *  同时填充 regionProvince / regionDistrict 供预警精确匹配使用。
+     *  v10.2-fix：地名语言标签统一用 zh-Hans 而非 zh-CN——BigDataCloud 的
+     *  zh-CN 词条对国内区县返回的是繁体（如北京「東城區」），与内置简体
+     *  行政区划表混排；zh-Hans 才稳定返回「东城区」。 */
     private String reverseGeocode(double lat, double lng) {
         if (cityName != null && distKm(lat, lng, lastLat, lastLng) < 0.5) {
             return cityName;
@@ -2766,7 +2769,7 @@ public class MainActivity extends Activity {
         String prov = null, dist = null;
         try {
             String url = "https://api.bigdatacloud.net/data/reverse-geocode-client"
-                    + "?latitude=" + lat + "&longitude=" + lng + "&localityLanguage=zh-CN";
+                    + "?latitude=" + lat + "&longitude=" + lng + "&localityLanguage=zh-Hans";
             JSONObject j = WeatherApi.getJson(url);
             c = j.optString("city", "");
             LogFile.i("Geo", "BigDataCloud 返回 city=" + c + " prov=" + j.optString("principalSubdivision", "")
@@ -2780,7 +2783,7 @@ public class MainActivity extends Activity {
         if (c == null || c.isEmpty()) {
             try {
                 String url = "https://nominatim.openstreetmap.org/reverse"
-                        + "?lat=" + lat + "&lon=" + lng + "&format=json&accept-language=zh-CN";
+                        + "?lat=" + lat + "&lon=" + lng + "&format=json&accept-language=zh-Hans,zh";
                 JSONObject j = WeatherApi.getJson(url);
                 JSONObject addr = j.optJSONObject("address");
                 if (addr != null) {
